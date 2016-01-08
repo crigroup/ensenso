@@ -80,7 +80,7 @@ int main(int argc, char **argv)
   ensenso.reset(new pcl::EnsensoGrabber);
   ensenso->openDevice(0);
   ensenso->openTcpPort();
-  ensenso->configureCapture(true, true, 1, 0.32, true, 1, false, false, false, 10, false); // Disable front light projector, enable IR led light
+  ensenso->configureCapture();
 
   l_image_pub.reset(new ros::Publisher);
   r_image_pub.reset(new ros::Publisher);

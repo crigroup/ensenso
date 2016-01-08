@@ -130,15 +130,20 @@ Troubleshooting
 
 ### Cannot connect to the camera
 
+Look for errors using the ueye camera manager:
+```{bash}
+$ ueyecameramanager
+```
+
 Try restarting the ueye daemon
 
-``` bash
+```{bash}
 $ sudo /etc/init.d/ueyeethdrc restart
 ```
 
 In case this doesn't work, try a forced stop before restarting:
 
-``` bash
+```{bash}
 $ sudo /etc/init.d/ueyeethdrc force-stop
 ```
 
