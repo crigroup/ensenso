@@ -8,7 +8,7 @@ The **master** branch is compatible with both ROS **Hydro** and **Indigo**.
   * Ensenso camera N35 (Ethernet version)
   * ROS Hydro (Ubuntu 12.04, 64 bits) or ROS Indigo (Ubuntu 14.04, 64 bits)
 
-**Maintainer:** Francisco Suárez Ruiz, [fsuarez6.github.io](fsuarez6.github.io)
+**Maintainer:** Francisco Suárez Ruiz, <http://fsuarez6.github.io>
 
 ### Documentation
   * See the installation instructions below.
