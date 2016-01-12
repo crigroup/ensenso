@@ -34,7 +34,7 @@ The Ensenso drivers are available for download here: <http://www.ensenso.com/sup
 
 Now, check your installation running the `nxView` command.
 
-The first time you run it, the camera should appear under `Monocular` `Cameras`. Press the **Auto Config** button. This will move the camera to `Depth` `Cameras`. Select the camera and click **Open**.
+The first time you run it, the camera should appear under `Monocular Cameras`. Press the **Auto Config** button. This will move the camera to `Depth Cameras`. Select the camera and click **Open**.
 
 In case you don't see the camera at all, check your internet connection, ping the camera or try to restart the ueye daemon: `sudo /etc/init.d/ueyeethdrc restart`
 
