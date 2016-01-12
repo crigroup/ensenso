@@ -8,7 +8,8 @@ The **master** branch is compatible with both ROS **Hydro** and **Indigo**.
   * Ensenso camera N35 (Ethernet version)
   * ROS Hydro (Ubuntu 12.04, 64 bits) or ROS Indigo (Ubuntu 14.04, 64 bits)
 
-**Maintainer:** Francisco Suárez Ruiz, <http://fsuarez6.github.io>
+### Maintainers
+  * [Francisco Suárez Ruiz](http://fsuarez6.github.io)
 
 ### Documentation
   * See the installation instructions below.
@@ -48,33 +49,39 @@ Clone the PCL repository:
 ```{bash}
 $ cd ~/git
 $ git clone https://github.com/PointCloudLibrary/pcl.git
-```
+``` 
 
-### Supporting c++11 (optional)
+### Supporting C++11
 
-Most likely, we will require `c++11` support. In the file `~/git/pcl/CMakeLists.txt` locate the line that contains this:
+We require `c++11` support. In the file `~/git/pcl/CMakeLists.txt` locate the line that contains this:
 
-``` bash
+```{bash}
 SET(CMAKE_CXX_FLAGS "-Wall ...
-```
+``` 
 
-Add the `c++11` flag:
+And add the `c++11` flag:
 
-``` bash
+**Ubuntu 12.04**
+```{bash}
+SET(CMAKE_CXX_FLAGS "-Wall -std=c++0x ...
+``` 
+
+**Ubuntu 14.04**
+```{bash}
 SET(CMAKE_CXX_FLAGS "-Wall -std=c++11 ...
-```
+``` 
 
 ### Compile and Install
 
 Create a build directory, compile and install:
 
-``` bash
+```{bash}
 $ cd ~/git/pcl
 $ mkdir build && cd build
 $ cmake -DCMAKE_BUILD_TYPE=Release ..
 $ make -j `nproc`
 $ sudo make install
-```
+``` 
 
 Repositories Installation
 -----------------------
@@ -93,12 +100,12 @@ $ git clone https://github.com/crigroup/ensenso.git
 You need to make `ros_pcl` depend on **PCL 1.8.0**. In the file `pcl_ros/CMakeLists.txt` locate the line that contains this:
 ```{bash}
 find_package(PCL REQUIRED)
-```
+``` 
 
 And replace it by:
 ```{bash}
 find_package(PCL 1.8.0 REQUIRED)
-```
+``` 
 
 Install any missing dependencies using rosdep:
 ```
@@ -109,7 +116,7 @@ $ rosdep install --from-paths . --ignore-src -y
 Now compile your ROS workspace. e.g.
 ```{bash}
 $ cd ~/catkin_ws && catkin_make
-```
+``` 
 
 Testing the Installation
 ------------------------
@@ -128,24 +135,41 @@ $ roslaunch ensenso viewer.launch
 Troubleshooting
 ===============
 
+### `OpenNI2` linking error
+
+If you get errors related to `OpenNI2` when building `pcl` set the `WITH_OPENNI2` compilation flag to `OFF`:
+```{bash}
+$ cmake -DCMAKE_BUILD_TYPE=Release -DWITH_OPENNI2=OFF .. 
+``` 
+
+### `VLPGrabber` Linking error
+
+In the file `pcl/io/CMakeLists.txt` comment out the source file `src/vlp_grabber.cpp`.
+
+Additionally, in the file `pcl/visualization/tools/CMakeLists.txt` comment out these two lines:
+```{bash}
+PCL_ADD_EXECUTABLE(pcl_vlp_viewer ${SUBSYS_NAME} vlp_viewer.cpp)
+target_link_libraries(pcl_vlp_viewer pcl_io pcl_common pcl_visualization)
+``` 
+
 ### Cannot connect to the camera
 
 Look for errors using the ueye camera manager:
 ```{bash}
 $ ueyecameramanager
-```
+``` 
 
 Try restarting the ueye daemon
 
 ```{bash}
 $ sudo /etc/init.d/ueyeethdrc restart
-```
+``` 
 
 In case this doesn't work, try a forced stop before restarting:
 
 ```{bash}
 $ sudo /etc/init.d/ueyeethdrc force-stop
-```
+``` 
 
 ### Camera IP
 
