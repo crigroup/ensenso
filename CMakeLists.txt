@@ -16,6 +16,10 @@ find_package(Eigen REQUIRED)
 find_package(PCL 1.8.0 REQUIRED)
 
 catkin_package(
+  INCLUDE_DIRS 
+    include
+  LIBRARIES 
+    cri_ensenso_grabber
   CATKIN_DEPENDS 
     cv_bridge
     eigen_conversions
@@ -26,10 +30,17 @@ catkin_package(
 )
 
 # Order of the include dirs matters!
+include_directories(include)
 include_directories(${PCL_INCLUDE_DIRS}) 
 include_directories(${catkin_INCLUDE_DIRS}) 
 add_definitions(${PCL_DEFINITIONS})
 
+# Libraries
+add_library(cri_ensenso_grabber src/cri_ensenso_grabber.cpp)
+target_link_libraries(cri_ensenso_grabber ${PCL_LIBRARIES} ${catkin_LIBRARIES})
 
-add_executable(ensenso_node src/ensenso_node.cpp)
-target_link_libraries(ensenso_node ${PCL_LIBRARIES} ${catkin_LIBRARIES})
+add_executable(viewer src/ensenso_node.cpp)
+target_link_libraries(viewer cri_ensenso_grabber ${PCL_LIBRARIES} ${catkin_LIBRARIES})
+
+add_executable(handeye_calibration src/handeye_calibration.cpp)
+target_link_libraries(handeye_calibration cri_ensenso_grabber ${PCL_LIBRARIES} ${catkin_LIBRARIES})
