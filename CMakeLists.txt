@@ -39,8 +39,8 @@ add_definitions(${PCL_DEFINITIONS})
 add_library(cri_ensenso_grabber src/cri_ensenso_grabber.cpp)
 target_link_libraries(cri_ensenso_grabber ${PCL_LIBRARIES} ${catkin_LIBRARIES})
 
-add_executable(viewer src/ensenso_node.cpp)
+add_executable(viewer src/viewer.cpp)
 target_link_libraries(viewer cri_ensenso_grabber ${PCL_LIBRARIES} ${catkin_LIBRARIES})
 
-add_executable(handeye_calibration src/handeye_calibration.cpp)
-target_link_libraries(handeye_calibration cri_ensenso_grabber ${PCL_LIBRARIES} ${catkin_LIBRARIES})
+#~ add_executable(handeye_calibration src/handeye_calibration.cpp)
+#~ target_link_libraries(handeye_calibration cri_ensenso_grabber ${PCL_LIBRARIES} ${catkin_LIBRARIES})
