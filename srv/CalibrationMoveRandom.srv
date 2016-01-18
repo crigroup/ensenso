@@ -1,4 +1,4 @@
-int64 a
-int64 b
+int64               pattern_pose
 ---
-int64 sum
+bool                success
+geometry_msgs/Pose  pose

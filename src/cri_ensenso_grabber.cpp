@@ -145,12 +145,10 @@ pcl::EnsensoGrabber::openDevice (const int device)
     PCL_THROW_EXCEPTION (pcl::IOException, "Cannot open multiple devices!");
 
   PCL_INFO ("Opening Ensenso stereo camera id = %d\n", device);
-
   try
   {
     // Create a pointer referencing the camera's tree item, for easier access:
     camera_ = (*root_)[itmCameras][itmBySerialNo][device];
-
     if (!camera_.exists () || camera_[itmType] != valStereo)
     {
       PCL_THROW_EXCEPTION (pcl::IOException, "Please connect a single stereo camera to your computer!");

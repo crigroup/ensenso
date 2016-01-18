@@ -44,33 +44,24 @@ class HandeyeCalibration
     { 
       // Initialize Ensenso
       ensenso_ptr_.reset(new pcl::EnsensoGrabber);
-      ensenso_ptr_->openDevice(0);
+      ensenso_ptr_->openDevice(1);
       ensenso_ptr_->openTcpPort();
       ensenso_ptr_->configureCapture(true, true, 1, 0.32, true, 1, false, false, false, 10, false);
       // Setup image publishers
       l_raw_pub_ = nh_.advertise<sensor_msgs::Image>("left/image_raw", 2);
       r_raw_pub_ = nh_.advertise<sensor_msgs::Image>("right/image_raw", 2);
-      // Setup services
-      std::string srv_name = "calibration_move_random";
-      move_client_ = nh_.serviceClient<ensenso::CalibrationMoveRandom>(srv_name.c_str());
+
       // Start ensenso grabber
       boost::function<void
       (const boost::shared_ptr<PointCloudXYZ>&,
        const boost::shared_ptr<PairOfImages>&,const boost::shared_ptr<PairOfImages>&)> f = boost::bind (&HandeyeCalibration::grabberCallback, this, _1, _2, _3);
       ensenso_ptr_->registerCallback(f);
       ensenso_ptr_->start();
-      // Wait for move robot service
-      ros::service::waitForService(srv_name.c_str());
-      ensenso::CalibrationMoveRandom srv;
-      srv.request.a = 2;
-      srv.request.b = 5;
-      if (move_client_.call(srv))
-        ROS_INFO("Sum: %ld", (long int)srv.response.sum);
-      else
-        ROS_ERROR("Failed to call service add_two_ints");
 
-      //~ performCalibration();
-      
+      if( performCalibration(10,12.5))
+        ROS_INFO("DONE CALIBRATION");
+      else
+        ROS_ERROR("FAIL TO CALIBRATE!");
     }
     
     ~HandeyeCalibration()
@@ -109,8 +100,16 @@ class HandeyeCalibration
       ensenso_ptr_->initExtrinsicCalibration(grid_spacing);
       ensenso_ptr_->start();
       
+      // Setup services
+      std::string srv_name = "calibration_move_random";
+      move_client_ = nh_.serviceClient<ensenso::CalibrationMoveRandom>(srv_name.c_str());
+      // Wait for move robot service
+      ros::service::waitForService(srv_name.c_str());
+      ensenso::CalibrationMoveRandom srv;
+      
       // Move the robot to the initial position???
       ////////////////////////////////////////////
+      
       
       // Capture calibration data from the sensor, move the robot and repeat until enough data is acquired
       std::vector<Eigen::Affine3d, Eigen::aligned_allocator<Eigen::Affine3d> > robot_poses;
@@ -130,19 +129,15 @@ class HandeyeCalibration
           continue;
         }
 
-        try // Collect robot pose in tool tool0 frame
-        {
-          //~ ros::Time now(ros::Time::now());
-          //~ listener.waitForTransform("/base", "/tool0", now, ros::Duration(1.5));
-          //~ listener.lookupTransform("/base", "/tool0", now, transform_stamp);
-          //~ Eigen::Affine3d robot_pose;
-          //~ tf::transformTFToEigen(transform_stamp, robot_pose);
-          //~ robot_poses.push_back(robot_pose);
-        }
-        catch (tf::TransformException &ex)
-        {
-          return false;
-        }
+        // Collect robot pose
+        srv.request.pattern_pose = 1;
+        if (move_client_.call(srv))
+          ROS_INFO("Coresponding robot pose acquired!");
+        else
+          ROS_ERROR("Failed to call service add_two_ints");
+        Eigen::Affine3d robot_pose;
+        tf::poseMsgToEigen(srv.response.pose, robot_pose);
+        robot_poses.push_back(robot_pose);
       }
 
       sleep(1);
@@ -151,15 +146,15 @@ class HandeyeCalibration
       
       // Compute calibration matrix
       // TODO: Add guess calibration support
-      PCL_INFO("Computing calibration matrix...");
+      PCL_INFO("Computing calibration matrix...\n");
       std::string result;
 
       if (!ensenso_ptr_->computeCalibrationMatrix(robot_poses, result, "Moving", "Hand"))
       {
-        PCL_ERROR("Failed to compute calibration!");
+        PCL_ERROR("Failed to compute calibration!\n");
         return false;
       }
-      PCL_INFO("Calibration computation successful!");
+      PCL_INFO("Calibration computation successful!\n");
       std::cout << "Result: " << result <<"\n";
       // Save the calibration result as another format?
       ///////////////////////////////////////////////
