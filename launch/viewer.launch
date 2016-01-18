@@ -2,7 +2,7 @@
 <launch>
   
   <!-- Ensenso wrapper-->
-  <node name="ensenso_node" pkg="ensenso" type="ensenso_node" ns="ensenso" output="screen" /> 
+  <node name="ensenso_node" pkg="ensenso" type="viewer" ns="ensenso" output="screen" /> 
   <!-- RViz-->
   <node name="rviz_node" pkg="rviz" type="rviz" args="-d $(find ensenso)/config/viewer.rviz" />
   

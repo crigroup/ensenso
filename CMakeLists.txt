@@ -6,11 +6,12 @@ find_package(catkin REQUIRED COMPONENTS
   cv_bridge
   eigen_conversions
   geometry_msgs
+  message_generation
   pcl_conversions
   pcl_ros
-  tf_conversions
   std_msgs
-  message_generation
+  tf_conversions
+  image_transport
 )
 
 find_package(Boost REQUIRED COMPONENTS system filesystem thread)
@@ -55,8 +56,11 @@ target_link_libraries(cri_ensenso_grabber ${PCL_LIBRARIES} ${catkin_LIBRARIES})
 
 add_executable(viewer src/viewer.cpp)
 target_link_libraries(viewer cri_ensenso_grabber ${PCL_LIBRARIES} ${catkin_LIBRARIES})
-  
 
 add_executable(handeye_calibration src/handeye_calibration.cpp)
 add_dependencies(handeye_calibration ${PROJECT_NAME}_gencpp)
 target_link_libraries(handeye_calibration cri_ensenso_grabber ${PCL_LIBRARIES} ${catkin_LIBRARIES})
+
+add_executable(test_rectified_images src/test_rectified_images.cpp)
+add_dependencies(test_rectified_images ${PROJECT_NAME}_gencpp)
+target_link_libraries(test_rectified_images cri_ensenso_grabber ${PCL_LIBRARIES} ${catkin_LIBRARIES})
