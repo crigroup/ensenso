@@ -43,6 +43,7 @@ class HandeyeCalibration
     image_transport::Publisher        l_rectified_pub_;
     image_transport::Publisher        r_rectified_pub_;
     // Point cloud
+    bool                              point_cloud_;
     ros::Publisher                    cloud_pub_;
     // TF
     std::string                       camera_frame_id_;
@@ -61,6 +62,7 @@ class HandeyeCalibration
       nh_private_.param("camera_frame_id", camera_frame_id_, std::string("ensenso_optical_frame"));
       if (!nh_private_.hasParam("camera_frame_id"))
         ROS_WARN_STREAM("Parameter [~camera_frame_id] not found, using default: " << camera_frame_id_);
+      // Booleans
       bool front_light, projector;
       nh_private_.param("front_light", front_light, false);
       if (!nh_private_.hasParam("front_light"))
@@ -68,13 +70,17 @@ class HandeyeCalibration
       nh_private_.param("projector", projector, false);
       if (!nh_private_.hasParam("projector"))
         ROS_WARN_STREAM("Parameter [~projector] not found, using default: " << projector);
+      nh_private_.param("point_cloud", point_cloud_, false);
+      if (!nh_private_.hasParam("point_cloud"))
+        ROS_WARN_STREAM("Parameter [~point_cloud] not found, using default: " << point_cloud_);
       // Advertise topics
       image_transport::ImageTransport it(nh_);
       l_raw_pub_ = it.advertiseCamera("left/image_raw", 2);
       r_raw_pub_ = it.advertiseCamera("right/image_raw", 2);
       l_rectified_pub_ = it.advertise("left/image_rect", 2);
       r_rectified_pub_ = it.advertise("right/image_rect", 2);
-      cloud_pub_ = nh_.advertise<PointCloudXYZ>("depth/points", 2, true); // Latched
+      if (point_cloud_)
+        cloud_pub_ = nh_.advertise<PointCloudXYZ>("depth/points", 2, true); // Latched
       // Initialize Ensenso
       ensenso_ptr_.reset(new pcl::EnsensoGrabber);
       ensenso_ptr_->openDevice(serial_no);
@@ -83,10 +89,17 @@ class HandeyeCalibration
       ensenso_ptr_->enableProjector(projector);
       ensenso_ptr_->enableFrontLight(front_light);
       // Start ensenso grabber
-      boost::function<void
-      (const boost::shared_ptr<PointCloudXYZ>&,
-       const boost::shared_ptr<PairOfImages>&,const boost::shared_ptr<PairOfImages>&)> f = boost::bind (&HandeyeCalibration::grabberCallback, this, _1, _2, _3);
-      ensenso_ptr_->registerCallback(f);
+      boost::function<void(
+          const boost::shared_ptr<PointCloudXYZ>&, 
+          const boost::shared_ptr<PairOfImages>&,
+          const boost::shared_ptr<PairOfImages>&)> f1 = boost::bind (&HandeyeCalibration::grabberCallback, this, _1, _2, _3);
+      boost::function<void(
+          const boost::shared_ptr<PairOfImages>&,
+          const boost::shared_ptr<PairOfImages>&)> f2 = boost::bind (&HandeyeCalibration::grabberCallback, this, _1, _2);
+      if (point_cloud_)
+        ensenso_ptr_->registerCallback(f1);
+      else
+        ensenso_ptr_->registerCallback(f2);
       ensenso_ptr_->start();
     }
     
@@ -96,8 +109,23 @@ class HandeyeCalibration
       ensenso_ptr_->closeDevice();
     }
     
+    void grabberCallback( const boost::shared_ptr<PairOfImages>& rawimages, const boost::shared_ptr<PairOfImages>& rectifiedimages)
+    {
+      // Get cameras info
+      sensor_msgs::CameraInfo linfo, rinfo;
+      ensenso_ptr_->getCameraInfo("Left", linfo);
+      ensenso_ptr_->getCameraInfo("Right", rinfo);
+      linfo.header.frame_id = camera_frame_id_;
+      rinfo.header.frame_id = camera_frame_id_;
+      // Images
+      l_raw_pub_.publish(*toImageMsg(rawimages->first), linfo, ros::Time::now());
+      r_raw_pub_.publish(*toImageMsg(rawimages->second), rinfo, ros::Time::now());
+      l_rectified_pub_.publish(toImageMsg(rectifiedimages->first));
+      r_rectified_pub_.publish(toImageMsg(rectifiedimages->second));
+    }
+    
     void grabberCallback( const boost::shared_ptr<PointCloudXYZ>& cloud,
-                      const boost::shared_ptr<PairOfImages>& rawimages, const boost::shared_ptr<PairOfImages>& rectifiedimages)
+                          const boost::shared_ptr<PairOfImages>& rawimages, const boost::shared_ptr<PairOfImages>& rectifiedimages)
     {
       // Get cameras info
       sensor_msgs::CameraInfo linfo, rinfo;

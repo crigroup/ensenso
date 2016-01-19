@@ -5,7 +5,7 @@
   <node name="ensenso_node" pkg="ensenso" type="ensenso_node" ns="ensenso" output="screen"> 
     <param name="serial_no"       type="string" value="150533" />
     <param name="camera_frame_id" type="string" value="ensenso_optical_frame" />
-    <param name="front_light"     type="bool"   value="True" />
+    <param name="front_light"     type="bool"   value="False" />
     <param name="projector"       type="bool"   value="False" />
   </node>
   <!-- RViz-->
