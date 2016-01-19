@@ -1,55 +1,14 @@
-/*
- * Software License Agreement (BSD License)
- *
- *  Point Cloud Library (PCL) - www.pointclouds.org
- *  Copyright (c) 2014-, Open Perception, Inc.
- *
- *  All rights reserved.
- *
- *  Redistribution and use in source and binary forms, with or without
- *  modification, are permitted provided that the following conditions
- *  are met:
- *
- *   * Redistributions of source code must retain the above copyright
- *     notice, this list of conditions and the following disclaimer.
- *   * Redistributions in binary form must reproduce the above
- *     copyright notice, this list of conditions and the following
- *     disclaimer in the documentation and/or other materials provided
- *     with the distribution.
- *   * Neither the name of the copyright holder(s) nor the names of its
- *     contributors may be used to endorse or promote products derived
- *     from this software without specific prior written permission.
- *
- *  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- *  "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- *  LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
- *  FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
- *  COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
- *  INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
- *  BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
- *  LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
- *  CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
- *  LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
- *  ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- *  POSSIBILITY OF SUCH DAMAGE.
- *
- *  Author: Victor Lamoine (victor.lamoine@gmail.com)
- */
-
+#include <vector>
 #include <pcl/pcl_config.h>
-#include "cri_ensenso_grabber.h"
 #include <pcl/exceptions.h>
 #include <pcl/common/io.h>
 #include <pcl/console/print.h>
 #include <pcl/point_types.h>
 #include <boost/format.hpp>
 #include <boost/algorithm/string/predicate.hpp>
+#include "ensenso_grabber.h"
 
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Handle Ensenso SDK exceptions
-// This function is called whenever an exception is raised to provide details about the error
-void
-ensensoExceptionHandling (const NxLibException &ex,
+void ensensoExceptionHandling (const NxLibException &ex,
                           std::string func_nam)
 {
   PCL_ERROR ("%s: NxLib error %s (%d) occurred while accessing item %s.\n", func_nam.c_str (), ex.getErrorText ().c_str (), ex.getErrorCode (),
@@ -61,7 +20,7 @@ ensensoExceptionHandling (const NxLibException &ex,
   }
 }
 
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 pcl::EnsensoGrabber::EnsensoGrabber () :
     device_open_ (false),
     tcp_open_ (false),
@@ -84,7 +43,6 @@ pcl::EnsensoGrabber::EnsensoGrabber () :
   }
 }
 
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 pcl::EnsensoGrabber::~EnsensoGrabber () throw ()
 {
   try
@@ -106,9 +64,7 @@ pcl::EnsensoGrabber::~EnsensoGrabber () throw ()
   }
 }
 
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-int
-pcl::EnsensoGrabber::enumDevices () const
+int pcl::EnsensoGrabber::enumDevices () const
 {
   int camera_count = 0;
 
@@ -137,18 +93,16 @@ pcl::EnsensoGrabber::enumDevices () const
   return (camera_count);
 }
 
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-bool
-pcl::EnsensoGrabber::openDevice (const int device)
+bool pcl::EnsensoGrabber::openDevice (std::string serial_no)
 {
   if (device_open_)
     PCL_THROW_EXCEPTION (pcl::IOException, "Cannot open multiple devices!");
-
-  PCL_INFO ("Opening Ensenso stereo camera id = %d\n", device);
+  PCL_INFO ("Opening Ensenso stereo camera S/N: %s\n", serial_no.c_str());
   try
   {
     // Create a pointer referencing the camera's tree item, for easier access:
-    camera_ = (*root_)[itmCameras][itmBySerialNo][device];
+    camera_ = (*root_)[itmCameras][itmBySerialNo][serial_no];
+
     if (!camera_.exists () || camera_[itmType] != valStereo)
     {
       PCL_THROW_EXCEPTION (pcl::IOException, "Please connect a single stereo camera to your computer!");
@@ -168,9 +122,7 @@ pcl::EnsensoGrabber::openDevice (const int device)
   return (true);
 }
 
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-bool
-pcl::EnsensoGrabber::closeDevice ()
+bool pcl::EnsensoGrabber::closeDevice ()
 {
   if (!device_open_)
     return (false);
@@ -191,9 +143,7 @@ pcl::EnsensoGrabber::closeDevice ()
   return (true);
 }
 
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-void
-pcl::EnsensoGrabber::start ()
+void pcl::EnsensoGrabber::start ()
 {
   if (isRunning ())
     return;
@@ -206,43 +156,31 @@ pcl::EnsensoGrabber::start ()
   grabber_thread_ = boost::thread (&pcl::EnsensoGrabber::processGrabbing, this);
 }
 
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-void
-pcl::EnsensoGrabber::stop ()
+void pcl::EnsensoGrabber::stop ()
 {
   if (running_)
   {
     running_ = false;  // Stop processGrabbing () callback
-
-    grabber_thread_.join ();  // join () waits for the thread to finish it's last iteration
-    // See: http://www.boost.org/doc/libs/1_54_0/doc/html/thread/thread_management.html#thread.thread_management.thread.join
+    grabber_thread_.join ();
   }
 }
 
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-bool
-pcl::EnsensoGrabber::isRunning () const
+bool pcl::EnsensoGrabber::isRunning () const
 {
   return (running_);
 }
 
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-bool
-pcl::EnsensoGrabber::isTcpPortOpen () const
+bool pcl::EnsensoGrabber::isTcpPortOpen () const
 {
   return (tcp_open_);
 }
 
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-std::string
-pcl::EnsensoGrabber::getName () const
+std::string pcl::EnsensoGrabber::getName () const
 {
   return ("EnsensoGrabber");
 }
 
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-bool
-pcl::EnsensoGrabber::configureCapture (const bool auto_exposure,
+bool pcl::EnsensoGrabber::configureCapture (const bool auto_exposure,
                                        const bool auto_gain,
                                        const int bining,
                                        const float exposure,
@@ -286,9 +224,7 @@ pcl::EnsensoGrabber::configureCapture (const bool auto_exposure,
   return (true);
 }
 
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-bool
-pcl::EnsensoGrabber::grabSingleCloud (pcl::PointCloud<pcl::PointXYZ> &cloud)
+bool pcl::EnsensoGrabber::grabSingleCloud (pcl::PointCloud<pcl::PointXYZ> &cloud)
 {
   if (!device_open_)
     return (false);
@@ -338,9 +274,7 @@ pcl::EnsensoGrabber::grabSingleCloud (pcl::PointCloud<pcl::PointXYZ> &cloud)
   }
 }
 
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-bool
-pcl::EnsensoGrabber::initExtrinsicCalibration (const int grid_spacing) const
+bool pcl::EnsensoGrabber::initExtrinsicCalibration (const int grid_spacing) const
 {
   if (!device_open_)
     return (false);
@@ -367,9 +301,7 @@ pcl::EnsensoGrabber::initExtrinsicCalibration (const int grid_spacing) const
   return (true);
 }
 
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-bool
-pcl::EnsensoGrabber::clearCalibrationPatternBuffer () const
+bool pcl::EnsensoGrabber::clearCalibrationPatternBuffer () const
 {
   if (!device_open_)
     return (false);
@@ -389,9 +321,7 @@ pcl::EnsensoGrabber::clearCalibrationPatternBuffer () const
   return (true);
 }
 
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-int
-pcl::EnsensoGrabber::captureCalibrationPattern () const
+int pcl::EnsensoGrabber::captureCalibrationPattern () const
 {
   if (!device_open_)
     return (-1);
@@ -413,9 +343,7 @@ pcl::EnsensoGrabber::captureCalibrationPattern () const
   return ( (*root_)[itmParameters][itmPatternCount].asInt ());
 }
 
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-bool
-pcl::EnsensoGrabber::estimateCalibrationPatternPose (Eigen::Affine3d &pattern_pose) const
+bool pcl::EnsensoGrabber::estimateCalibrationPatternPose (Eigen::Affine3d &pattern_pose) const
 {
   if (!device_open_)
     return (false);
@@ -441,9 +369,7 @@ pcl::EnsensoGrabber::estimateCalibrationPatternPose (Eigen::Affine3d &pattern_po
   }
 }
 
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-bool
-pcl::EnsensoGrabber::computeCalibrationMatrix (const std::vector<Eigen::Affine3d, Eigen::aligned_allocator<Eigen::Affine3d> > &robot_poses,
+bool pcl::EnsensoGrabber::computeCalibrationMatrix (const std::vector<Eigen::Affine3d, Eigen::aligned_allocator<Eigen::Affine3d> > &robot_poses,
                                                std::string &json,
                                                const std::string setup,
                                                const std::string target,
@@ -533,9 +459,7 @@ pcl::EnsensoGrabber::computeCalibrationMatrix (const std::vector<Eigen::Affine3d
   }
 }
 
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-bool
-pcl::EnsensoGrabber::storeEEPROMExtrinsicCalibration () const
+bool pcl::EnsensoGrabber::storeEEPROMExtrinsicCalibration () const
 {
   try
   {
@@ -550,9 +474,7 @@ pcl::EnsensoGrabber::storeEEPROMExtrinsicCalibration () const
   }
 }
 
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-bool
-pcl::EnsensoGrabber::clearEEPROMExtrinsicCalibration ()
+bool pcl::EnsensoGrabber::clearEEPROMExtrinsicCalibration ()
 {
   try
   {
@@ -568,9 +490,7 @@ pcl::EnsensoGrabber::clearEEPROMExtrinsicCalibration ()
   }
 }
 
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-bool
-pcl::EnsensoGrabber::setExtrinsicCalibration (const double euler_angle,
+bool pcl::EnsensoGrabber::setExtrinsicCalibration (const double euler_angle,
                                               Eigen::Vector3d &rotation_axis,
                                               const Eigen::Vector3d &translation,
                                               const std::string target)
@@ -603,8 +523,7 @@ pcl::EnsensoGrabber::setExtrinsicCalibration (const double euler_angle,
   return (true);
 }
 
-bool
-pcl::EnsensoGrabber::setExtrinsicCalibration (const std::string target)
+bool pcl::EnsensoGrabber::setExtrinsicCalibration (const std::string target)
 {
   if (!device_open_)
     return (false);
@@ -614,8 +533,7 @@ pcl::EnsensoGrabber::setExtrinsicCalibration (const std::string target)
   return (setExtrinsicCalibration (0.0, rotation, translation, target));
 }
 
-bool
-pcl::EnsensoGrabber::setExtrinsicCalibration (const Eigen::Affine3d &transformation,
+bool pcl::EnsensoGrabber::setExtrinsicCalibration (const Eigen::Affine3d &transformation,
                                               const std::string target)
 {
   std::string json;
@@ -632,17 +550,13 @@ pcl::EnsensoGrabber::setExtrinsicCalibration (const Eigen::Affine3d &transformat
   return (setExtrinsicCalibration (euler_angle, rotation_axis, translation, target));
 }
 
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-float
-pcl::EnsensoGrabber::getFramesPerSecond () const
+float pcl::EnsensoGrabber::getFramesPerSecond () const
 {
   boost::mutex::scoped_lock lock (fps_mutex_);
   return (frequency_.getFrequency ());
 }
 
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-bool
-pcl::EnsensoGrabber::openTcpPort (const int port)
+bool pcl::EnsensoGrabber::openTcpPort (const int port)
 {
   try
   {
@@ -657,9 +571,7 @@ pcl::EnsensoGrabber::openTcpPort (const int port)
   return (true);
 }
 
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-bool
-pcl::EnsensoGrabber::closeTcpPort ()
+bool pcl::EnsensoGrabber::closeTcpPort ()
 {
   try
   {
@@ -674,9 +586,7 @@ pcl::EnsensoGrabber::closeTcpPort ()
   return (true);
 }
 
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-std::string
-pcl::EnsensoGrabber::getTreeAsJson (const bool pretty_format) const
+std::string pcl::EnsensoGrabber::getTreeAsJson (const bool pretty_format) const
 {
   try
   {
@@ -689,9 +599,7 @@ pcl::EnsensoGrabber::getTreeAsJson (const bool pretty_format) const
   }
 }
 
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-std::string
-pcl::EnsensoGrabber::getResultAsJson (const bool pretty_format) const
+std::string pcl::EnsensoGrabber::getResultAsJson (const bool pretty_format) const
 {
   try
   {
@@ -706,9 +614,37 @@ pcl::EnsensoGrabber::getResultAsJson (const bool pretty_format) const
   }
 }
 
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-bool
-pcl::EnsensoGrabber::jsonTransformationToEulerAngles (const std::string &json,
+bool pcl::EnsensoGrabber::getCalibrationData(std::string side, std::vector<double> &D, std::vector<double> &K, std::vector<double> &R, std::vector<double> &P) const
+{
+  try
+  {
+    // The distortion 'plumb_bob' model has 5 parameters (k1, k2, t1, t2, k3)
+    D.resize(5);
+    for(std::size_t i = 0; i < D.size(); ++i)
+      D[i] = camera_[itmCalibration][itmMonocular][side][itmDistortion][i].asDouble();
+    // Intrinsic camera matrix for the raw (distorted) images.
+    for(std::size_t i = 0; i < 3; ++i)
+    {
+      for(std::size_t j = 0; j < 3; ++j)
+        K.push_back( camera_[itmCalibration][itmMonocular][side][itmCamera][i][j].asDouble() );
+    }
+    // Rectification matrix
+    R.resize(9);
+    for(std::size_t i = 0; i < 3; ++i)
+    {
+      for(std::size_t j = 0; j < 3; ++j)
+        R.push_back( camera_[itmCalibration][itmStereo][side][itmCamera][i][j].asDouble() );
+    }
+    return true;
+  }
+  catch (NxLibException &ex)
+  {
+    ensensoExceptionHandling (ex, "getRawCalibrationData");
+    return false;
+  }
+}
+
+bool pcl::EnsensoGrabber::jsonTransformationToEulerAngles (const std::string &json,
                                                       double &x,
                                                       double &y,
                                                       double &z,
@@ -741,9 +677,7 @@ pcl::EnsensoGrabber::jsonTransformationToEulerAngles (const std::string &json,
   }
 }
 
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-bool
-pcl::EnsensoGrabber::jsonTransformationToAngleAxis (const std::string json,
+bool pcl::EnsensoGrabber::jsonTransformationToAngleAxis (const std::string json,
                                                     double &alpha,
                                                     Eigen::Vector3d &axis,
                                                     Eigen::Vector3d &translation) const
@@ -770,9 +704,7 @@ pcl::EnsensoGrabber::jsonTransformationToAngleAxis (const std::string json,
   }
 }
 
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-bool
-pcl::EnsensoGrabber::jsonTransformationToMatrix (const std::string transformation,
+bool pcl::EnsensoGrabber::jsonTransformationToMatrix (const std::string transformation,
                                                  Eigen::Affine3d &matrix) const
 {
   try
@@ -809,9 +741,7 @@ pcl::EnsensoGrabber::jsonTransformationToMatrix (const std::string transformatio
   }
 }
 
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-bool
-pcl::EnsensoGrabber::eulerAnglesTransformationToJson (const double x,
+bool pcl::EnsensoGrabber::eulerAnglesTransformationToJson (const double x,
                                                       const double y,
                                                       const double z,
                                                       const double w,
@@ -848,9 +778,7 @@ pcl::EnsensoGrabber::eulerAnglesTransformationToJson (const double x,
   }
 }
 
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-bool
-pcl::EnsensoGrabber::angleAxisTransformationToJson (const double x,
+bool pcl::EnsensoGrabber::angleAxisTransformationToJson (const double x,
                                                     const double y,
                                                     const double z,
                                                     const double rx,
@@ -884,9 +812,7 @@ pcl::EnsensoGrabber::angleAxisTransformationToJson (const double x,
   }
 }
 
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-bool
-pcl::EnsensoGrabber::matrixTransformationToJson (const Eigen::Affine3d &matrix,
+bool pcl::EnsensoGrabber::matrixTransformationToJson (const Eigen::Affine3d &matrix,
                                                  std::string &json,
                                                  const bool pretty_format) const
 {
@@ -926,9 +852,7 @@ pcl::EnsensoGrabber::matrixTransformationToJson (const Eigen::Affine3d &matrix,
   }
 }
 
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-pcl::uint64_t
-pcl::EnsensoGrabber::getPCLStamp (const double ensenso_stamp)
+pcl::uint64_t pcl::EnsensoGrabber::getPCLStamp (const double ensenso_stamp)
 {
 #if defined _WIN32 || defined _WIN64
   return (ensenso_stamp * 1000000.0);
@@ -937,9 +861,7 @@ pcl::EnsensoGrabber::getPCLStamp (const double ensenso_stamp)
 #endif
 }
 
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-std::string
-pcl::EnsensoGrabber::getOpenCVType (const int channels,
+std::string pcl::EnsensoGrabber::getOpenCVType (const int channels,
                                     const int bpe,
                                     const bool isFlt)
 {
@@ -948,9 +870,7 @@ pcl::EnsensoGrabber::getOpenCVType (const int channels,
   return (boost::str (boost::format ("CV_%i%cC%i") % bits % type % channels));
 }
 
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-void
-pcl::EnsensoGrabber::processGrabbing ()
+void pcl::EnsensoGrabber::processGrabbing ()
 {
   bool continue_grabbing = running_;
   while (continue_grabbing)

@@ -13,8 +13,7 @@
 #include <cv_bridge/cv_bridge.h>
 #include <sensor_msgs/PointCloud2.h>
 #include <pcl_ros/point_cloud.h>
-#include <ensenso/CalibrationMoveRandom.h>
-//image transport
+// Image transport
 #include <image_transport/image_transport.h>
 #include <sensor_msgs/image_encodings.h>
 #include <opencv2/imgproc/imgproc.hpp>
@@ -23,7 +22,7 @@
 // PCL headers
 #include <pcl/common/colors.h>
 #include <pcl/common/transforms.h>
-#include "cri_ensenso_grabber.h"
+#include "ensenso_grabber.h"
 
 
 // Typedefs
@@ -49,18 +48,25 @@ class HandeyeCalibration
      HandeyeCalibration(): 
       nh_private_("~"),
       it_(nh_)
-    { 
+    {
+      // Read parameters
+      std::string serial_no;
+      nh_private_.param(std::string("serial_no"), serial_no, std::string("150533"));
+      if (!nh_private_.hasParam("serial_no"))
+        ROS_WARN_STREAM("Parameter [~serial_no] not found, using default: " << serial_no);
       // Initialize Ensenso
       ensenso_ptr_.reset(new pcl::EnsensoGrabber);
-      ensenso_ptr_->openDevice(0);
+      ensenso_ptr_->openDevice(serial_no);
       ensenso_ptr_->openTcpPort();
       ensenso_ptr_->configureCapture(true, true, 1, 0.32, true, 1, false, false, false, 10, false);
-      // Setup image publishers      
+      // Get calibration data
+      std::vector<double> D, K, R, P;
+      ensenso_ptr_->getCalibrationData("Left", D, K, R, P);
+      // Setup image publishers
       l_raw_pub_ = it_.advertise("/left/image_raw", 2);
       r_raw_pub_ = it_.advertise("/right/image_raw", 2);
       l_rectified_pub_ = it_.advertise("/left/image_rect", 2);
       r_rectified_pub_ = it_.advertise("/right/image_rect", 2);
-      
       // Start ensenso grabber
       boost::function<void
       (const boost::shared_ptr<PointCloudXYZ>&,

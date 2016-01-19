@@ -1,48 +1,10 @@
-/*
- * Software License Agreement (BSD License)
- *
- *  Point Cloud Library (PCL) - www.pointclouds.org
- *  Copyright (c) 2014-, Open Perception, Inc.
- *
- *  All rights reserved.
- *
- *  Redistribution and use in source and binary forms, with or without
- *  modification, are permitted provided that the following conditions
- *  are met:
- *
- *   * Redistributions of source code must retain the above copyright
- *     notice, this list of conditions and the following disclaimer.
- *   * Redistributions in binary form must reproduce the above
- *     copyright notice, this list of conditions and the following
- *     disclaimer in the documentation and/or other materials provided
- *     with the distribution.
- *   * Neither the name of the copyright holder(s) nor the names of its
- *     contributors may be used to endorse or promote products derived
- *     from this software without specific prior written permission.
- *
- *  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- *  "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- *  LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
- *  FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
- *  COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
- *  INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
- *  BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
- *  LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
- *  CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
- *  LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
- *  ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- *  POSSIBILITY OF SUCH DAMAGE.
- *
- *  Author: Victor Lamoine (victor.lamoine@gmail.com)
- */
-
-#include <pcl/pcl_config.h>
-
 #ifndef __PCL_IO_ENSENSO_GRABBER__
 #define __PCL_IO_ENSENSO_GRABBER__
 
-#include <pcl/common/time.h>
+#include <vector>
+#include <pcl/pcl_config.h>
 #include <pcl/common/io.h>
+#include <pcl/common/time.h>
 #include <pcl/io/eigen.h>
 #include <Eigen/Geometry>
 #include <Eigen/StdVector>
@@ -91,43 +53,35 @@ namespace pcl
       EnsensoGrabber ();
 
       /** @brief Destructor inherited from the Grabber interface. It never throws. */
-      virtual
-      ~EnsensoGrabber () throw ();
+      virtual ~EnsensoGrabber () throw ();
 
       /** @brief Searches for available devices
        * @returns The number of Ensenso devices connected */
-      int
-      enumDevices () const;
+      int enumDevices () const;
 
       /** @brief Opens an Ensenso device
        * @param[in] device The device ID to open
        * @return True if successful, false otherwise */
-      bool
-      openDevice (const int device = 0);
+      bool openDevice (std::string serial_no);
 
       /** @brief Closes the Ensenso device
        * @return True if successful, false otherwise */
-      bool
-      closeDevice ();
+      bool closeDevice ();
 
       /** @brief Start the point cloud and or image acquisition
        * @note Opens device "0" if no device is open */
-      void
-      start ();
+      void start ();
 
       /** @brief Stop the data acquisition */
-      void
-      stop ();
+      void stop ();
 
       /** @brief Check if the data acquisition is still running
        * @return True if running, false otherwise */
-      bool
-      isRunning () const;
+      bool isRunning () const;
 
       /** @brief Check if a TCP port is opened
        * @return True if open, false otherwise */
-      bool
-      isTcpPortOpen () const;
+      bool isTcpPortOpen () const;
 
       /** @brief Get class name
        * @returns A string containing the class name */
@@ -315,6 +269,8 @@ namespace pcl
        */
       std::string
       getResultAsJson (const bool pretty_format = true) const;
+      
+      bool getCalibrationData(std::string side, std::vector<double> &D, std::vector<double> &K, std::vector<double> &R, std::vector<double> &P) const;
 
       /** @brief Get the Euler angles corresponding to a JSON string (an angle axis transformation)
        * @param[in] json A string containing the angle axis transformation in JSON format

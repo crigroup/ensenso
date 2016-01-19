@@ -18,7 +18,7 @@
 // PCL headers
 #include <pcl/common/colors.h>
 #include <pcl/common/transforms.h>
-#include "cri_ensenso_grabber.h"
+#include "ensenso_grabber.h"
 
 
 // Typedefs
@@ -44,7 +44,7 @@ class HandeyeCalibration
     { 
       // Initialize Ensenso
       ensenso_ptr_.reset(new pcl::EnsensoGrabber);
-      ensenso_ptr_->openDevice(1);
+      ensenso_ptr_->openDevice("150534");
       ensenso_ptr_->openTcpPort();
       ensenso_ptr_->configureCapture(true, true, 1, 0.32, true, 1, false, false, false, 10, false);
       // Setup image publishers
