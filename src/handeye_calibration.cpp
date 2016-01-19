@@ -18,7 +18,7 @@
 // PCL headers
 #include <pcl/common/colors.h>
 #include <pcl/common/transforms.h>
-#include "ensenso_grabber.h"
+#include "ensenso/ensenso_grabber.h"
 
 
 // Typedefs

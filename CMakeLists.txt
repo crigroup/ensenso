@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 2.8.3)
 project(ensenso)
 
 find_package(catkin REQUIRED COMPONENTS
+  camera_info_manager
   cmake_modules
   cv_bridge
   eigen_conversions
@@ -35,6 +36,7 @@ catkin_package(
   LIBRARIES 
     ensenso_grabber
   CATKIN_DEPENDS 
+    camera_info_manager
     cv_bridge
     eigen_conversions
     geometry_msgs

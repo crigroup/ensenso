@@ -13,8 +13,10 @@
 #include <cv_bridge/cv_bridge.h>
 #include <sensor_msgs/PointCloud2.h>
 #include <pcl_ros/point_cloud.h>
+
 // Image transport
 #include <image_transport/image_transport.h>
+#include <sensor_msgs/CameraInfo.h>
 #include <sensor_msgs/image_encodings.h>
 #include <opencv2/imgproc/imgproc.hpp>
 #include <opencv2/highgui/highgui.hpp>
@@ -22,7 +24,7 @@
 // PCL headers
 #include <pcl/common/colors.h>
 #include <pcl/common/transforms.h>
-#include "ensenso_grabber.h"
+#include "ensenso/ensenso_grabber.h"
 
 
 // Typedefs
@@ -35,38 +37,51 @@ class HandeyeCalibration
   private:
     // Ros
     ros::NodeHandle                   nh_, nh_private_;
-    image_transport::ImageTransport   it_;
-    image_transport::Publisher        l_raw_pub_;
-    image_transport::Publisher        r_raw_pub_;
+    // Images
+    image_transport::CameraPublisher  l_raw_pub_;
+    image_transport::CameraPublisher  r_raw_pub_;
     image_transport::Publisher        l_rectified_pub_;
     image_transport::Publisher        r_rectified_pub_;
-    
+    // Point cloud
+    ros::Publisher                    cloud_pub_;
+    // TF
+    std::string                       camera_frame_id_;
     // Ensenso grabber
-    pcl::EnsensoGrabber::Ptr  ensenso_ptr_;
+    pcl::EnsensoGrabber::Ptr          ensenso_ptr_;
     
   public:
      HandeyeCalibration(): 
-      nh_private_("~"),
-      it_(nh_)
+      nh_private_("~")
     {
       // Read parameters
       std::string serial_no;
       nh_private_.param(std::string("serial_no"), serial_no, std::string("150533"));
       if (!nh_private_.hasParam("serial_no"))
         ROS_WARN_STREAM("Parameter [~serial_no] not found, using default: " << serial_no);
+      nh_private_.param("camera_frame_id", camera_frame_id_, std::string("ensenso_optical_frame"));
+      if (!nh_private_.hasParam("camera_frame_id"))
+        ROS_WARN_STREAM("Parameter [~camera_frame_id] not found, using default: " << camera_frame_id_);
+      bool front_light, projector;
+      nh_private_.param("front_light", front_light, false);
+      if (!nh_private_.hasParam("front_light"))
+        ROS_WARN_STREAM("Parameter [~front_light] not found, using default: " << front_light);
+      nh_private_.param("projector", projector, false);
+      if (!nh_private_.hasParam("projector"))
+        ROS_WARN_STREAM("Parameter [~projector] not found, using default: " << projector);
+      // Advertise topics
+      image_transport::ImageTransport it(nh_);
+      l_raw_pub_ = it.advertiseCamera("left/image_raw", 2);
+      r_raw_pub_ = it.advertiseCamera("right/image_raw", 2);
+      l_rectified_pub_ = it.advertise("left/image_rect", 2);
+      r_rectified_pub_ = it.advertise("right/image_rect", 2);
+      cloud_pub_ = nh_.advertise<PointCloudXYZ>("depth/points", 2, true); // Latched
       // Initialize Ensenso
       ensenso_ptr_.reset(new pcl::EnsensoGrabber);
       ensenso_ptr_->openDevice(serial_no);
       ensenso_ptr_->openTcpPort();
-      ensenso_ptr_->configureCapture(true, true, 1, 0.32, true, 1, false, false, false, 10, false);
-      // Get calibration data
-      std::vector<double> D, K, R, P;
-      ensenso_ptr_->getCalibrationData("Left", D, K, R, P);
-      // Setup image publishers
-      l_raw_pub_ = it_.advertise("/left/image_raw", 2);
-      r_raw_pub_ = it_.advertise("/right/image_raw", 2);
-      l_rectified_pub_ = it_.advertise("/left/image_rect", 2);
-      r_rectified_pub_ = it_.advertise("/right/image_rect", 2);
+      ensenso_ptr_->configureCapture();
+      ensenso_ptr_->enableProjector(projector);
+      ensenso_ptr_->enableFrontLight(front_light);
       // Start ensenso grabber
       boost::function<void
       (const boost::shared_ptr<PointCloudXYZ>&,
@@ -82,12 +97,22 @@ class HandeyeCalibration
     }
     
     void grabberCallback( const boost::shared_ptr<PointCloudXYZ>& cloud,
-                      const boost::shared_ptr<PairOfImages>& rawimages,  const boost::shared_ptr<PairOfImages>& rectifiedimages)
+                      const boost::shared_ptr<PairOfImages>& rawimages, const boost::shared_ptr<PairOfImages>& rectifiedimages)
     {
-      l_raw_pub_.publish(toImageMsg(rawimages->first));
-      r_raw_pub_.publish(toImageMsg(rawimages->second));
+      // Get cameras info
+      sensor_msgs::CameraInfo linfo, rinfo;
+      ensenso_ptr_->getCameraInfo("Left", linfo);
+      ensenso_ptr_->getCameraInfo("Right", rinfo);
+      linfo.header.frame_id = camera_frame_id_;
+      rinfo.header.frame_id = camera_frame_id_;
+      // Images
+      l_raw_pub_.publish(*toImageMsg(rawimages->first), linfo, ros::Time::now());
+      r_raw_pub_.publish(*toImageMsg(rawimages->second), rinfo, ros::Time::now());
       l_rectified_pub_.publish(toImageMsg(rectifiedimages->first));
       r_rectified_pub_.publish(toImageMsg(rectifiedimages->second));
+      // Point cloud
+      cloud->header.frame_id = camera_frame_id_;
+      cloud_pub_.publish(cloud);
     }
     
     sensor_msgs::ImagePtr toImageMsg(pcl::PCLImage pcl_image)
@@ -110,7 +135,7 @@ class HandeyeCalibration
 
 int main(int argc, char **argv)
 {
-  ros::init (argc, argv, "handeye_calibration_node");
+  ros::init (argc, argv, "ensenso");
   HandeyeCalibration cal;
   ros::spin();
   ros::shutdown();

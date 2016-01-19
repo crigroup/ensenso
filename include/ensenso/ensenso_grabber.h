@@ -1,7 +1,6 @@
 #ifndef __PCL_IO_ENSENSO_GRABBER__
 #define __PCL_IO_ENSENSO_GRABBER__
 
-#include <vector>
 #include <pcl/pcl_config.h>
 #include <pcl/common/io.h>
 #include <pcl/common/time.h>
@@ -14,6 +13,8 @@
 
 #include <pcl/io/grabber.h>
 #include <pcl/common/synchronizer.h>
+
+#include <camera_info_manager/camera_info_manager.h>
 
 #include <nxLib.h> // Ensenso SDK
 
@@ -270,7 +271,13 @@ namespace pcl
       std::string
       getResultAsJson (const bool pretty_format = true) const;
       
-      bool getCalibrationData(std::string side, std::vector<double> &D, std::vector<double> &K, std::vector<double> &R, std::vector<double> &P) const;
+      /** @brief Get meta information for a camera.
+       * @param[in] cam A string containing the camera (Left or Right)
+       * @param[out] cam_info meta information for a camera.
+       * @return True if successful, false otherwise
+       * @note See: [sensor_msgs/CameraInfo](http://docs.ros.org/api/sensor_msgs/html/msg/CameraInfo.html)
+       */
+      bool getCameraInfo(std::string cam, sensor_msgs::CameraInfo &cam_info) const;
 
       /** @brief Get the Euler angles corresponding to a JSON string (an angle axis transformation)
        * @param[in] json A string containing the angle axis transformation in JSON format
@@ -343,6 +350,9 @@ namespace pcl
                                        const double r,
                                        std::string &json,
                                        const bool pretty_format = true) const;
+                                       
+      bool enableFrontLight(const bool enable) const;
+      bool enableProjector(const bool enable) const;
 
       /** @brief Get the JSON string corresponding to an angle axis transformation
        * @param[in] x The X angle

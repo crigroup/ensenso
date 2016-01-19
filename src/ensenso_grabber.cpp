@@ -1,4 +1,3 @@
-#include <vector>
 #include <pcl/pcl_config.h>
 #include <pcl/exceptions.h>
 #include <pcl/common/io.h>
@@ -6,7 +5,7 @@
 #include <pcl/point_types.h>
 #include <boost/format.hpp>
 #include <boost/algorithm/string/predicate.hpp>
-#include "ensenso_grabber.h"
+#include "ensenso/ensenso_grabber.h"
 
 void ensensoExceptionHandling (const NxLibException &ex,
                           std::string func_nam)
@@ -614,32 +613,72 @@ std::string pcl::EnsensoGrabber::getResultAsJson (const bool pretty_format) cons
   }
 }
 
-bool pcl::EnsensoGrabber::getCalibrationData(std::string side, std::vector<double> &D, std::vector<double> &K, std::vector<double> &R, std::vector<double> &P) const
+bool pcl::EnsensoGrabber::enableFrontLight(const bool enable) const
 {
   try
   {
-    // The distortion 'plumb_bob' model has 5 parameters (k1, k2, t1, t2, k3)
-    D.resize(5);
-    for(std::size_t i = 0; i < D.size(); ++i)
-      D[i] = camera_[itmCalibration][itmMonocular][side][itmDistortion][i].asDouble();
-    // Intrinsic camera matrix for the raw (distorted) images.
+    camera_[itmParameters][itmCapture][itmFrontLight].set(enable);
+  }
+  catch (NxLibException &ex)
+  {
+    ensensoExceptionHandling(ex, "enableFrontLight");
+    return (false);
+  }
+  return (true);
+}
+
+bool pcl::EnsensoGrabber::enableProjector(const bool enable) const
+{
+  try
+  {
+    camera_[itmParameters][itmCapture][itmProjector].set(enable);
+  }
+  catch (NxLibException &ex)
+  {
+    ensensoExceptionHandling(ex, "enableProjector");
+    return (false);
+  }
+  return (true);
+}
+
+bool pcl::EnsensoGrabber::getCameraInfo(std::string cam, sensor_msgs::CameraInfo &cam_info) const
+{
+  try
+  {
+    cam_info.width = camera_[itmSensor][itmSize][0].asInt();
+    cam_info.height = camera_[itmSensor][itmSize][1].asInt();
+    cam_info.distortion_model = "plumb_bob";
+    cam_info.D.resize(5);
+    for(std::size_t i = 0; i < cam_info.D.size(); ++i)
+      cam_info.D[i] = camera_[itmCalibration][itmMonocular][cam][itmDistortion][i].asDouble();
     for(std::size_t i = 0; i < 3; ++i)
     {
       for(std::size_t j = 0; j < 3; ++j)
-        K.push_back( camera_[itmCalibration][itmMonocular][side][itmCamera][i][j].asDouble() );
+      {
+        cam_info.K[3*i+j] = camera_[itmCalibration][itmMonocular][cam][itmCamera][j][i].asDouble();
+        cam_info.R[3*i+j] = camera_[itmCalibration][itmDynamic][itmStereo][cam][itmRotation][j][i].asDouble();
+        cam_info.P[3*i+j] = camera_[itmCalibration][itmDynamic][itmStereo][cam][itmCamera][j][i].asDouble();
+      }
     }
-    // Rectification matrix
-    R.resize(9);
-    for(std::size_t i = 0; i < 3; ++i)
+    // Ensenso has all the units in millimetres. Change them to meters.
+    double factor = 1000.;
+    int idxs[] = {0,2,4,5};
+    for(std::size_t i = 0; i < 4; ++i)
     {
-      for(std::size_t j = 0; j < 3; ++j)
-        R.push_back( camera_[itmCalibration][itmStereo][side][itmCamera][i][j].asDouble() );
+      cam_info.K[idxs[i]] /= factor;
+      cam_info.P[idxs[i]] /= factor;
+    }
+    if (cam == "Right")
+    {
+      double B = camera_[itmCalibration][itmStereo][itmBaseline].asDouble() / factor;
+      double fx = cam_info.P[0];
+      cam_info.P[3] = (-fx * B);
     }
     return true;
   }
   catch (NxLibException &ex)
   {
-    ensensoExceptionHandling (ex, "getRawCalibrationData");
+    ensensoExceptionHandling (ex, "getCameraInfo");
     return false;
   }
 }
