@@ -1,4 +1,6 @@
-int64               pattern_pose
+geometry_msgs/Pose  patternpose
+float               minradius
+bool                gotoinitpose
 ---
 bool                success
-geometry_msgs/Pose  pose
+geometry_msgs/Pose  robotpose
