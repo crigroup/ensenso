@@ -1,5 +1,5 @@
 geometry_msgs/Pose  patternpose
-float               minradius
+float64             minradius
 bool                gotoinitpose
 ---
 bool                success

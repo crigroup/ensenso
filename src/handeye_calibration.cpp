@@ -61,7 +61,7 @@ class HandeyeCalibration
       // Initialize calibration
       float grid_spacing = 12.5;
       int num_pose = 10;
-      Eigen::Affine3d est_pattern_pose(Eigen::Affine3d::Identity());
+      Eigen::Affine3d est_pattern_pose(Eigen::Affine3d::Identity()); //Update this later
       if( performCalibration(num_pose,grid_spacing,est_pattern_pose))
         ROS_INFO("DONE CALIBRATION");
       else
@@ -113,13 +113,6 @@ class HandeyeCalibration
       // Convert req format to msg
       tf::poseEigenToMsg(est_pattern_pose, srv.request.patternpose);
       srv.request.minradius = 450;
-      // Move robot to the initial pose
-      srv.request.gotoinitpose = true;
-      if (move_client_.call(srv))
-        {
-          ROS_INFO("Moved robot back to init position");
-        }
-      else ROS_ERROR("Failed to call service");
       // Capture calibration data from the sensor, move the robot and repeat until enough data is acquired
       std::vector<Eigen::Affine3d, Eigen::aligned_allocator<Eigen::Affine3d> > robot_poses;
       srv.request.gotoinitpose = false;
@@ -136,7 +129,6 @@ class HandeyeCalibration
           }
           // Collect pattern pose
           ensenso_ptr_->stop();
-          sleep(1); // Sleep time: the robot might oscillate little bit after moving
           if (ensenso_ptr_->captureCalibrationPattern() == -1)
           {
             ROS_WARN_STREAM("Failed to capture calibration pattern: skipping to next pose");

@@ -26,8 +26,8 @@ add_service_files(
 
 generate_messages(
   DEPENDENCIES
-  std_msgs
   geometry_msgs
+  std_msgs
 )
 
 catkin_package(
@@ -39,7 +39,9 @@ catkin_package(
     camera_info_manager
     cv_bridge
     eigen_conversions
+    message_runtime
     geometry_msgs
+    std_msgs
     pcl_conversions
     pcl_ros
     tf_conversions
