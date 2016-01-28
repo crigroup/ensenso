@@ -61,7 +61,14 @@ class HandeyeCalibration
       // Initialize calibration
       float grid_spacing = 12.5;
       int num_pose = 10;
-      Eigen::Affine3d est_pattern_pose(Eigen::Affine3d::Identity()); //Update this later
+      Eigen::Matrix4d pattern_pose;
+      pattern_pose << 0,0,1,-1,
+                      0,1,0,0,
+                      -1,0,0,0.8,
+                      0,0,0,1;
+      Eigen::Affine3d est_pattern_pose;
+      est_pattern_pose= pattern_pose; //Update this later
+      
       if( performCalibration(num_pose,grid_spacing,est_pattern_pose))
         ROS_INFO("DONE CALIBRATION");
       else
@@ -112,7 +119,7 @@ class HandeyeCalibration
       ensenso::CalibrationMoveRandom srv;
       // Convert req format to msg
       tf::poseEigenToMsg(est_pattern_pose, srv.request.patternpose);
-      srv.request.minradius = 450;
+      srv.request.minradius = 0.450;
       // Capture calibration data from the sensor, move the robot and repeat until enough data is acquired
       std::vector<Eigen::Affine3d, Eigen::aligned_allocator<Eigen::Affine3d> > robot_poses;
       srv.request.gotoinitpose = false;
@@ -146,13 +153,13 @@ class HandeyeCalibration
           ROS_ERROR("Failed to call service");
       }
       sleep(1);
-      // Move the robot back to initial pose
-      srv.request.gotoinitpose = true;
-      if (move_client_.call(srv))
-        {
-          ROS_INFO("Moved robot back to init position");
-        }
-      else ROS_ERROR("Failed to call service");
+      //~ // Move the robot back to initial pose
+      //~ srv.request.gotoinitpose = true;
+      //~ if (move_client_.call(srv))
+        //~ {
+          //~ ROS_INFO("Moved robot back to init position");
+        //~ }
+      //~ else ROS_ERROR("Failed to call service");
       
       
       // Compute calibration matrix
