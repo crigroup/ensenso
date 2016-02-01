@@ -60,7 +60,7 @@ class HandeyeCalibration
       
       // Initialize calibration
       float grid_spacing = 12.5;
-      int num_pose = 50;
+      int num_pose = 100;
       Eigen::Matrix4d pattern_pose;
       pattern_pose << 0,0,1,-1,
                       0,1,0,0,
