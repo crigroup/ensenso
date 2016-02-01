@@ -60,7 +60,8 @@ class HandeyeCalibration
       
       // Initialize calibration
       float grid_spacing = 12.5;
-      int num_pose = 100;
+      int num_pose = 200;
+      bool store_to_eeprom = true;
       Eigen::Matrix4d pattern_pose;
       pattern_pose << 0,0,1,-1,
                       0,1,0,0,
@@ -69,7 +70,7 @@ class HandeyeCalibration
       Eigen::Affine3d est_pattern_pose;
       est_pattern_pose= pattern_pose; //Update this later
       
-      if( performCalibration(num_pose,grid_spacing,est_pattern_pose))
+      if( performCalibration(num_pose,grid_spacing,store_to_eeprom,est_pattern_pose))
         ROS_INFO("DONE CALIBRATION");
       else
         ROS_ERROR("FAIL TO CALIBRATE!");
@@ -103,7 +104,7 @@ class HandeyeCalibration
       r_raw_pub_.publish(cv_bridge::CvImage(header, encoding, r_raw_image).toImageMsg());
     }
     
-    bool performCalibration(int num_pose, float grid_spacing, Eigen::Affine3d est_pattern_pose)
+    bool performCalibration(int num_pose, float grid_spacing, bool store_to_eeprom, Eigen::Affine3d est_pattern_pose)
     {
       // Setup Ensenso
       ensenso_ptr_->stop();
@@ -165,13 +166,22 @@ class HandeyeCalibration
         ROS_ERROR("Failed to compute calibration!");
         return false;
       }
-      ROS_INFO("Calibration computation successful!");
       std::cout << "Result: " << result <<"\n";
-      // Save the calibration result as another format?
-      ///////////////////////////////////////////////
+
+      // Store calibration matrix into EEPROM if required
+      if (store_to_eeprom)
+      {
+        if (!ensenso_ptr_->clearEEPROMExtrinsicCalibration())
+        {
+          ROS_INFO("Could not reset extrinsic calibration!");
+        }
+        ensenso_ptr_->storeEEPROMExtrinsicCalibration();
+        ROS_INFO("Calibration computation successful and stored into the EEPROM");
+      }
+      else
+        ROS_INFO("Calibration computation successful!");
       return true;
     }
-
 };
 
 int main(int argc, char **argv)
