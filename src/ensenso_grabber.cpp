@@ -307,7 +307,6 @@ bool pcl::EnsensoGrabber::clearCalibrationPatternBuffer () const
 
   if (running_)
     return (false);
-
   try
   {
     NxLibCommand (cmdDiscardPatterns).execute ();
@@ -682,6 +681,8 @@ bool pcl::EnsensoGrabber::getCameraInfo(std::string cam, sensor_msgs::CameraInfo
     return false;
   }
 }
+
+
 
 bool pcl::EnsensoGrabber::jsonTransformationToEulerAngles (const std::string &json,
                                                       double &x,

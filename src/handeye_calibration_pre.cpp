@@ -14,7 +14,7 @@
 #include <sensor_msgs/PointCloud2.h>
 #include <pcl_ros/point_cloud.h>
 #include <ensenso/CalibrationMoveRandom.h>
-#include <ensenso/AXXBsolver.h>
+
 // PCL headers
 #include <pcl/common/colors.h>
 #include <pcl/common/transforms.h>
@@ -34,7 +34,7 @@ class HandeyeCalibration
     ros::NodeHandle           nh_, nh_private_;
     ros::Publisher            l_raw_pub_;
     ros::Publisher            r_raw_pub_;
-    ros::ServiceClient        move_client_, solver_client_;
+    ros::ServiceClient        move_client_;
     // Ensenso grabber
     pcl::EnsensoGrabber::Ptr  ensenso_ptr_;
     
@@ -60,7 +60,7 @@ class HandeyeCalibration
       
       // Initialize calibration
       float grid_spacing = 12.5;
-      int num_pose = 150;
+      int num_pose = 50;
       Eigen::Matrix4d pattern_pose;
       pattern_pose << 0,0,1,-1,
                       0,1,0,0,
@@ -107,106 +107,69 @@ class HandeyeCalibration
     {
       // Setup Ensenso
       ensenso_ptr_->stop();
-      ensenso_ptr_->clearCalibrationPatternBuffer();// In case a previous calibration was launched!
-        
+      ensenso_ptr_->clearCalibrationPatternBuffer(); // In case a previous calibration was launched!
       ensenso_ptr_->initExtrinsicCalibration(grid_spacing);
       ensenso_ptr_->start();
-
+      
       // Setup services
-      //random move service
-      std::string randmovesrv_name = "calibration_move_random";
-      move_client_ = nh_.serviceClient<ensenso::CalibrationMoveRandom>(randmovesrv_name.c_str());
+      std::string srv_name = "calibration_move_random";
+      move_client_ = nh_.serviceClient<ensenso::CalibrationMoveRandom>(srv_name.c_str());
       // Wait for move robot service
-      ros::service::waitForService(randmovesrv_name.c_str());
-      ensenso::CalibrationMoveRandom randmovesrv;
+      ros::service::waitForService(srv_name.c_str());
+      ensenso::CalibrationMoveRandom srv;
       // Convert req format to msg
-      tf::poseEigenToMsg(est_pattern_pose, randmovesrv.request.patternpose);
-      randmovesrv.request.minradius = 0.50;
+      tf::poseEigenToMsg(est_pattern_pose, srv.request.patternpose);
+      srv.request.minradius = 0.450;
       // Capture calibration data from the sensor, move the robot and repeat until enough data is acquired
       std::vector<Eigen::Affine3d, Eigen::aligned_allocator<Eigen::Affine3d> > robot_poses;
-      randmovesrv.request.gotoinitpose = false;
-      
-
-      // Setup variables
-      geometry_msgs::PoseArray robotposes;
-      geometry_msgs::PoseArray objwrtcamposes;
-      robotposes.poses.clear();
-      robotposes.header.stamp = ros::Time::now();
-      robotposes.header.frame_id = "/robot";
-      objwrtcamposes.poses.clear();
-      objwrtcamposes.header.stamp = ros::Time::now();
-      objwrtcamposes.header.frame_id = "/robot";
-      
-      while (ros::ok() && robotposes.poses.size() < num_pose)
-      { 
-        ROS_INFO("Start a new collecting_data");
+      srv.request.gotoinitpose = false;
+      while (ros::ok() && robot_poses.size() < num_pose)
+      {
         ensenso_ptr_->start();
         // Move the robot to a random position (still be able to capture the pattern)
-        if (move_client_.call(randmovesrv))
+        if (move_client_.call(srv))
         {
-          if (!randmovesrv.response.success)
+          if (!srv.response.success)
           {
             ROS_ERROR("Random_move: failed to plan the robot!");
             return false;
           }
-          sleep(0.5); 
+          sleep(0.5);
           // Collect pattern pose
           ensenso_ptr_->stop();
-          ensenso_ptr_->clearCalibrationPatternBuffer(); // Clear buffer before acquiring a new one
-          int executecapturing ;
-          for (int i =0; i<5; i+=1)
+          if (ensenso_ptr_->captureCalibrationPattern() == -1)
           {
-            executecapturing = ensenso_ptr_->captureCalibrationPattern();
-            if (executecapturing == -1)
-            {
-              ROS_WARN_STREAM("Failed to capture calibration pattern: break");
-              break;
-            }
-            std::cout <<"No. pattern poses: "<<executecapturing<< "\n";
+            ROS_WARN_STREAM("Failed to capture calibration pattern: skipping to next pose");
+            continue;
           }
-          if (executecapturing <3)
-            {ROS_WARN_STREAM("Failed to capture calibration pattern: skipping to next pose");continue;}
-          Eigen::Affine3d patternwrtcam;
-          geometry_msgs::Pose patternwrtcampose;
-          ensenso_ptr_->estimateCalibrationPatternPose(patternwrtcam);
-          tf::poseEigenToMsg(patternwrtcam, patternwrtcampose);
-          objwrtcamposes.poses.push_back(patternwrtcampose);
           ROS_INFO("Pattern pose acquired!");
-          ensenso_ptr_->clearCalibrationPatternBuffer();
           // Collect robot pose
-          robotposes.poses.push_back(randmovesrv.response.robotpose);
+          Eigen::Affine3d robot_pose;
+          tf::poseMsgToEigen(srv.response.robotpose, robot_pose);
+          robot_poses.push_back(robot_pose);
           ROS_INFO("Robot pose acquired!");
-          std::cout << robotposes.poses.size() << " of " << num_pose << " data acquired\n"; 
+          std::cout << robot_poses.size() << " of " << num_pose << " data acquired\n";  
         }
         else
           ROS_ERROR("Failed to call service");
       }
       sleep(1);
       
-      ROS_INFO("Calling AX=XB solver to find calibration matrix...");
-      //Solver service
-      std::string solversrv_name = "AXXBsolver";
-      solver_client_ = nh_.serviceClient<ensenso::AXXBsolver>(solversrv_name.c_str());
-      // Wait for move robot service
-      ros::service::waitForService(solversrv_name.c_str());
-      ensenso::AXXBsolver solversrv;
-      solversrv.request.robotposes = robotposes;
-      solversrv.request.objwrtcamposes = objwrtcamposes;
-      if (solver_client_.call(solversrv))
-        {
-        ROS_INFO("Calibration computation successful!");
-        Eigen::Affine3d result;
-        tf::poseMsgToEigen(solversrv.response.X, result);
-        std::cout << "Translation:\n" << result.translation() <<"\n";
-        std::cout << "Rotation:\n" << result.rotation() <<"\n";
-        // Save the calibration result as another format?
-        ///////////////////////////////////////////////
-        return true;
-        }
-      else
-        ROS_ERROR("Failed to call service");
-      return false;
-      
+      // Compute calibration matrix
+      // TODO: Add guess calibration support
+      ROS_INFO("Computing calibration matrix...");
+      std::string result;
+
+      if (!ensenso_ptr_->computeCalibrationMatrix(robot_poses, result, "Moving", "Hand"))
+      {
+        ROS_ERROR("Failed to compute calibration!");
+        return false;
+      }
+      ROS_INFO("Calibration computation successful!");
+      std::cout << "Result: " << result <<"\n";
+      // Save the calibration result as another format?
+      ///////////////////////////////////////////////
+      return true;
     }
 
 };
