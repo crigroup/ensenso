@@ -6,7 +6,7 @@
     <param name="serial_no"       type="string" value="150533" />
     <param name="camera_frame_id" type="string" value="ensenso_optical_frame" />
     <param name="front_light"     type="bool"   value="False" />
-    <param name="projector"       type="bool"   value="False" />
+    <param name="projector"       type="bool"   value="True" />
   </node>
   <!-- RViz-->
   <node name="rviz_node" pkg="rviz" type="rviz" args="-d $(find ensenso)/config/viewer.rviz" />

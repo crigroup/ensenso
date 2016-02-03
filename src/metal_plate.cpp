@@ -149,8 +149,10 @@ void callback(const pcl::PointCloud<pcl::PointXYZ>::ConstPtr& cloud)
   /*printf ("Cloud: width = %d, height = %d\n", msg->width, msg->height);
   BOOST_FOREACH (const pcl::PointXYZ& pt, msg->points)
     printf ("\t(%f, %f, %f)\n", pt.x, pt.y, pt.z); */
-      pcl::PCLPointCloud2::Ptr cloud_blob (new pcl::PCLPointCloud2);
-      cloud_blob = reinterpret_cast <pcl::PCLPointCloud2::Ptr>(cloud);
+    //  pcl::PCLPointCloud2::Ptr cloud_blob (new pcl::PCLPointCloud2); 
+      ROS_INFO ("here");
+   //   cloud_blob = reinterpret_cast <pcl::PCLPointCloud2::Ptr>(cloud);
+   //   extract (cloud_blob);
 }
 
 int main (int argc, char** argv)
@@ -158,11 +160,16 @@ int main (int argc, char** argv)
   
   ros::init(argc, argv, "metal_plate");
   ros::NodeHandle nh;
-  
+  ros::Rate loop_rate(10);
+   ROS_INFO ("1here");
   //pcl::PCLPointCloud2::Ptr cloud_blob (new pcl::PCLPointCloud2); 
-  ros::Subscriber sub = nh.subscribe<PointCloud>("depth/points", 1, callback);
-  ros::spin();
-  
+  while (ros::ok())
+  {
+    ros::Subscriber sub = nh.subscribe<PointCloud>("/ensenso/depth/points", 2, callback);
+    // ROS_INFO ("2ere");
+    ros::spinOnce();
+    loop_rate.sleep();
+  }
   //pcl::PCLPointCloud2::Ptr cloud_blob (new pcl::PCLPointCloud2); 
  
   // read pcd from file.

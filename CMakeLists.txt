@@ -62,6 +62,13 @@ target_link_libraries(ensenso_grabber ${PCL_LIBRARIES} ${catkin_LIBRARIES})
 add_executable(ensenso_node src/ensenso_node.cpp)
 target_link_libraries(ensenso_node ensenso_grabber ${PCL_LIBRARIES} ${catkin_LIBRARIES})
 
+#add_executable(find_plate src/find_plate.cpp)
+#target_link_libraries(find_plate  ensenso_grabber ${PCL_LIBRARIES} ${catkin_LIBRARIES})
+
+#add_executable(metal_plate src/metal_plate.cpp)
+#add_dependencies(metal_plate ${PROJECT_NAME}_gencpp)
+#target_link_libraries(metal_plate ensenso_grabber${PCL_LIBRARIES} ${catkin_LIBRARIES})
+
 add_executable(handeye_calibration src/handeye_calibration.cpp)
 add_dependencies(handeye_calibration ${PROJECT_NAME}_gencpp)
 target_link_libraries(handeye_calibration ensenso_grabber ${PCL_LIBRARIES} ${catkin_LIBRARIES})
