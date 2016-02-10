@@ -54,11 +54,20 @@ int main(int argc, char** argv)
   
   pcl::PCLPointCloud2::Ptr cloud_blob (new pcl::PCLPointCloud2);
   pcl::PCDReader reader;
-  reader.read (argv[1], *cloud_blob);
-
+  //reader.read (argv[1], *cloud_blob);
+  
+  pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_1 (new pcl::PointCloud<pcl::PointXYZ>);
+  reader.read (argv[1], *cloud_1);
+  
+  
+  /*ros::Subscriber sub; 
+  sub = nh.subscribe ("input_cloud", 1, cloud_callback); */
+  
+  pcl::toPCLPointCloud2( *cloud_1, *cloud_blob);            // conversion from point_cloud_1 to point_cloud_2. 
+  
  
   sensor_msgs::PointCloud2 output;
-  pcl_conversions::fromPCL(*cloud_blob, output);
+  pcl_conversions::fromPCL(*cloud_blob, output);           // conversion from point_cloud_2 to ros sensor msg
   
   ros::Rate loop_rate(10);
   while (nh.ok())
