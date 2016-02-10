@@ -43,6 +43,89 @@
 #include <pcl_ros/transforms.h>
 #include <pcl/point_cloud.h>
 
+#include <pcl/range_image/range_image_planar.h>
+#include <pcl/visualization/range_image_visualizer.h>
+#include <pcl/features/range_image_border_extractor.h>
+#include <pcl/keypoints/narf_keypoint.h>
+
+
+
+int rangeimager ( pcl::PointCloud<pcl::PointXYZ>::Ptr cloud )
+{
+ 
+	// Parameters needed by the planar range image object:
+ 
+	// Image size. Both Kinect and Xtion work at 640x480.
+	int imageSizeX = 640;
+	int imageSizeY = 480;
+	// Center of projection. here, we choose the middle of the image.
+	float centerX = 640.0f / 2.0f;
+	float centerY = 480.0f / 2.0f;
+	// Focal length. The value seen here has been taken from the original depth images.
+	// It is safe to use the same value vertically and horizontally.
+	float focalLengthX = 525.0f, focalLengthY = focalLengthX;
+	// Sensor pose. Thankfully, the cloud includes the data.
+	Eigen::Affine3f sensorPose = Eigen::Affine3f(Eigen::Translation3f(cloud->sensor_origin_[0],
+								 cloud->sensor_origin_[1],
+								 cloud->sensor_origin_[2])) *
+								 Eigen::Affine3f(cloud->sensor_orientation_);
+	// Noise level. If greater than 0, values of neighboring points will be averaged.
+	// This would set the search radius (e.g., 0.03 == 3cm).
+	float noiseLevel = 0.0f;
+	// Minimum range. If set, any point closer to the sensor than this will be ignored.
+	float minimumRange = 0.0f;
+ 
+	// Planar range image object.
+	pcl::RangeImagePlanar rangeImagePlanar;
+	rangeImagePlanar.createFromPointCloudWithFixedSize(*cloud, imageSizeX, imageSizeY,
+			centerX, centerY, focalLengthX, focalLengthX,
+			sensorPose, pcl::RangeImage::CAMERA_FRAME,
+			noiseLevel, minimumRange);
+ 
+	// Visualize the image.
+	/*pcl::visualization::RangeImageVisualizer viewer("Planar range image");
+	viewer.showRangeImage(rangeImagePlanar);*/
+  
+  pcl::PointCloud<pcl::BorderDescription>::Ptr borders(new pcl::PointCloud<pcl::BorderDescription>);
+  pcl::RangeImageBorderExtractor borderExtractor(&rangeImagePlanar);
+	borderExtractor.compute(*borders);
+  
+  pcl::NarfKeypoint detector(&borderExtractor);
+  pcl::PointCloud<int>::Ptr keypoints(new pcl::PointCloud<int>);
+  detector.setRangeImage(&rangeImagePlanar);
+  detector.getParameters().support_size = 0.2f;
+	detector.compute(*keypoints);
+  pcl::visualization::RangeImageVisualizer viewer("NARF keypoints");
+	viewer.showRangeImage(rangeImagePlanar);
+	for (size_t i = 0; i < keypoints->points.size(); ++i)
+	{
+		viewer.markPoint(keypoints->points[i] % rangeImagePlanar.width,
+						 keypoints->points[i] / rangeImagePlanar.width,
+						 // Set the color of the pixel to red (the background
+						 // circle is already that color). All other parameters
+						 // are left untouched, check the API for more options.
+						 pcl::visualization::Vector3ub(1.0f, 0.0f, 0.0f));
+	}
+  
+  /*
+  // Visualize the borders.
+	pcl::visualization::RangeImageVisualizer* viewer = NULL;
+	viewer = pcl::visualization::RangeImageVisualizer::getRangeImageBordersWidget(rangeImagePlanar,
+			 -std::numeric_limits<float>::infinity(),
+			 std::numeric_limits<float>::infinity(),
+			 false, *borders, "Borders");*/
+  
+  
+  
+	while (!viewer.wasStopped())
+	{
+		viewer.spinOnce();
+		// Sleep 100ms to go easy on the CPU.
+    std::cout<<"inside viewer"<<endl;
+		pcl_sleep(0.1);
+	}
+}
+
 
 
 boost::shared_ptr<pcl::visualization::PCLVisualizer>  givecentroid ( pcl::PointCloud<pcl::PointXYZ>::Ptr cloud )
@@ -83,7 +166,29 @@ boost::shared_ptr<pcl::visualization::PCLVisualizer>  givecentroid ( pcl::PointC
     pcl::fromPCLPointCloud2(pcl_pc2,*temp_cloud);
     //do stuff with temp_cloud here
     ROS_INFO("inside Callback");
-    givecentroid(temp_cloud);
+    //givecentroid(temp_cloud);
+    
+      
+      // reduce pointcloud size
+      // Create the filtering object: downsample the dataset using a leaf size of 1cm
+      pcl::PCLPointCloud2::Ptr cloud_blob(&pcl_pc2), cloud_filtered_blob (new pcl::PCLPointCloud2);
+      pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_filtered (new pcl::PointCloud<pcl::PointXYZ>);
+      std::cerr << "PointCloud before filtering: " << cloud_blob->width * cloud_blob->height << " data points." << std::endl;
+      
+      // Create the filtering object: downsample the dataset using a leaf size of 2cm
+      pcl::VoxelGrid<pcl::PCLPointCloud2> sor;
+      sor.setInputCloud (cloud_blob);
+      sor.setLeafSize (0.02f, 0.02f, 0.02f);
+      sor.filter (*cloud_filtered_blob);           //pcd saved in cloud_filtered_blob
+      
+      // Convert to the templated PointCloud
+      pcl::fromPCLPointCloud2 (*cloud_filtered_blob, *cloud_filtered);      // convert a PCLPointCloud2 binary data blob into a pcl::PointCloud<T> object.
+      
+      std::cerr << "PointCloud after filtering: " << cloud_filtered->width * cloud_filtered->height << " data points." << std::endl;
+      
+
+    
+    rangeimager(cloud_filtered);
 }
 
 int main (int argc, char** argv)
@@ -92,13 +197,14 @@ int main (int argc, char** argv)
   ros::init (argc, argv, "cloud_sub");
   ros::NodeHandle nh;
   ros::Rate loop_rate(10);
-  
+  ROS_INFO("inside main");
   // Create a ROS subscriber for the input point cloud
   ros::Subscriber sub;
   
  // while (nh.ok())
   //{
-    sub = nh.subscribe ("input_cloud", 1, cloud_callback);
+    sub = nh.subscribe ("/ensenso/depth/points", 2, cloud_callback);
+   // sub = nh.subscribe ("input_cloud", 2, cloud_callback);
   //  ros::spinOnce ();
   //  loop_rate.sleep ();
  // }
