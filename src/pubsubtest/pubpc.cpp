@@ -44,6 +44,7 @@
 
 typedef pcl::PointCloud<pcl::PointXYZ> PointCloud;
 
+
 int main(int argc, char** argv)
 {
   ros::init (argc, argv, "pub_pcl");
