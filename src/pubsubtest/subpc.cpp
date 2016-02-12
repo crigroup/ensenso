@@ -53,6 +53,11 @@
 #include <pcl/filters/radius_outlier_removal.h>
 #include <pcl/filters/conditional_removal.h>
 
+//opencv
+#include <cv_bridge/cv_bridge.h>
+#include <opencv2/imgproc/imgproc.hpp>
+#include <opencv2/highgui/highgui.hpp>
+
 bool voxel_reduction (false);
 bool stat_removal (false);
 bool radius_removal (false);
@@ -238,7 +243,7 @@ public:
         
         pcl::RadiusOutlierRemoval<pcl::PointXYZ> outrem;
         outrem.setInputCloud(PCL1_temp_cloud);
-        outrem.setRadiusSearch(0.8);
+        outrem.setRadiusSearch(0.08);
         outrem.setMinNeighborsInRadius (2);
         outrem.filter (*PCL1_cloud_filtered);
         

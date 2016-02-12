@@ -52,3 +52,6 @@ target_link_libraries(pubpc ${PCL_LIBRARIES} ${catkin_LIBRARIES})
 
 add_executable(subpc subpc.cpp)
 target_link_libraries(subpc ${PCL_LIBRARIES} ${catkin_LIBRARIES})
+
+add_executable(imageopencv imageopencv.cpp)
+target_link_libraries(imageopencv ${PCL_LIBRARIES} ${catkin_LIBRARIES})
