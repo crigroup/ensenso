@@ -21,8 +21,9 @@ find_package(PCL 1.8.0 REQUIRED)
 
 add_service_files(
   FILES
-  CalibrationMoveRandom.srv
   AXXBsolver.srv
+  CalibrationMoveRandom.srv
+  CameraLights.srv
 )
 
 generate_messages(
@@ -60,6 +61,7 @@ add_library(ensenso_grabber src/ensenso_grabber.cpp)
 target_link_libraries(ensenso_grabber ${PCL_LIBRARIES} ${catkin_LIBRARIES})
 
 add_executable(ensenso_node src/ensenso_node.cpp)
+add_dependencies(ensenso_node ${PROJECT_NAME}_gencpp)
 target_link_libraries(ensenso_node ensenso_grabber ${PCL_LIBRARIES} ${catkin_LIBRARIES})
 
 #add_executable(find_plate src/find_plate.cpp)

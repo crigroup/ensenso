@@ -1,8 +1,6 @@
 // Standard headers
 #include <string>
 #include <fstream>
-#include <iostream>
-#include <vector>
 
 // ROS headers
 #include <ros/ros.h>
@@ -26,25 +24,10 @@
 // PCL headers
 #include <pcl/common/colors.h>
 #include <pcl/common/transforms.h>
+
+// Ensenso package
 #include "ensenso/ensenso_grabber.h"
-
-#include <pcl/ModelCoefficients.h>
-#include <pcl/io/pcd_io.h>
-#include <pcl/point_types.h>
-#include <pcl/sample_consensus/method_types.h>
-#include <pcl/sample_consensus/model_types.h>
-#include <pcl/segmentation/sac_segmentation.h>
-#include <pcl/filters/voxel_grid.h>
-#include <pcl/filters/extract_indices.h>
-#include <pcl/features/normal_3d.h>
-#include <pcl/visualization/pcl_visualizer.h>
-#include <pcl_conversions/pcl_conversions.h>
-#include <pcl/conversions.h>
-#include <boost/foreach.hpp>
-#include <pcl/PCLPointCloud2.h>
-#include <pcl_ros/transforms.h>
-
-#include <pcl/kdtree/kdtree_flann.h>
+#include "ensenso/CameraLights.h"
 
 
 // Typedefs
@@ -53,11 +36,12 @@ typedef pcl::PointXYZ PointXYZ;
 typedef pcl::PointCloud<PointXYZ> PointCloudXYZ;
 
 
-class HandeyeCalibration
+class EnsensoNode
 {
   private:
     // Ros
     ros::NodeHandle                   nh_, nh_private_;
+    ros::ServiceServer                ligths_srv_;
     // Images
     image_transport::CameraPublisher  l_raw_pub_;
     image_transport::CameraPublisher  r_raw_pub_;
@@ -67,7 +51,6 @@ class HandeyeCalibration
     bool                              point_cloud_;
     ros::Publisher                    cloud_pub_;
     // Camera info
-    bool                              camera_info_;
     ros::Publisher                    linfo_pub_;
     ros::Publisher                    rinfo_pub_;
 
@@ -77,7 +60,7 @@ class HandeyeCalibration
     pcl::EnsensoGrabber::Ptr          ensenso_ptr_;
     
   public:
-     HandeyeCalibration(): 
+     EnsensoNode(): 
       nh_private_("~")
     {
       // Read parameters
@@ -105,11 +88,12 @@ class HandeyeCalibration
       r_raw_pub_ = it.advertiseCamera("right/image_raw", 2);
       l_rectified_pub_ = it.advertise("left/image_rect", 2);
       r_rectified_pub_ = it.advertise("right/image_rect", 2);
-      //if (point_cloud_)
+      if (point_cloud_)
         cloud_pub_ = nh_.advertise<sensor_msgs::PointCloud2 >("depth/points", 2, true); // Latched
-      // if (camera_info_)
-        linfo_pub_=nh_.advertise<sensor_msgs::CameraInfo> ("left/camera_info", 2, true);
-        rinfo_pub_=nh_.advertise<sensor_msgs::CameraInfo> ("right/camera_info", 2, true);
+      linfo_pub_=nh_.advertise<sensor_msgs::CameraInfo> ("left/camera_info", 2, true);
+      rinfo_pub_=nh_.advertise<sensor_msgs::CameraInfo> ("right/camera_info", 2, true);
+      // Advertise services
+      ligths_srv_ = nh_.advertiseService("camera_lights", &EnsensoNode::cameraLigthsCB, this);
       // Initialize Ensenso
       ensenso_ptr_.reset(new pcl::EnsensoGrabber);
       ensenso_ptr_->openDevice(serial_no);
@@ -121,22 +105,29 @@ class HandeyeCalibration
       boost::function<void(
           const boost::shared_ptr<PointCloudXYZ>&, 
           const boost::shared_ptr<PairOfImages>&,
-          const boost::shared_ptr<PairOfImages>&)> f1 = boost::bind (&HandeyeCalibration::grabberCallback, this, _1, _2, _3);
+          const boost::shared_ptr<PairOfImages>&)> f1 = boost::bind (&EnsensoNode::grabberCallback, this, _1, _2, _3);
       boost::function<void(
           const boost::shared_ptr<PairOfImages>&,
-          const boost::shared_ptr<PairOfImages>&)> f2 = boost::bind (&HandeyeCalibration::grabberCallback, this, _1, _2);
-      if (1)
-      //(point_cloud_)
+          const boost::shared_ptr<PairOfImages>&)> f2 = boost::bind (&EnsensoNode::grabberCallback, this, _1, _2);
+      if (point_cloud_)
         ensenso_ptr_->registerCallback(f1);
       else
         ensenso_ptr_->registerCallback(f2);
       ensenso_ptr_->start();
     }
     
-    ~HandeyeCalibration()
+    ~EnsensoNode()
     {
       ensenso_ptr_->closeTcpPort();
       ensenso_ptr_->closeDevice();
+    }
+    
+    bool cameraLigthsCB(ensenso::CameraLightsRequest  &req, ensenso::CameraLightsResponse &res)
+    {
+      ensenso_ptr_->enableProjector(req.projector);
+      ensenso_ptr_->enableFrontLight(req.front_light);
+      res.success = true;
+      return true;
     }
     
     void grabberCallback( const boost::shared_ptr<PairOfImages>& rawimages, const boost::shared_ptr<PairOfImages>& rectifiedimages)
@@ -174,7 +165,7 @@ class HandeyeCalibration
       // Point cloud
       cloud->header.frame_id = camera_frame_id_;
       sensor_msgs::PointCloud2 cloud_msg;
-      pcl::toROSMsg 	(*  cloud, cloud_msg);
+      pcl::toROSMsg(*cloud, cloud_msg);
       cloud_pub_.publish(cloud_msg);
     }
     
@@ -200,7 +191,7 @@ class HandeyeCalibration
 int main(int argc, char **argv)
 {
   ros::init (argc, argv, "ensenso");
-  HandeyeCalibration cal;
+  EnsensoNode ensenso_node;
   ros::spin();
   ros::shutdown();
   return 0;
