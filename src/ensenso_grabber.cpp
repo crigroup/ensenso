@@ -20,6 +20,7 @@ void ensensoExceptionHandling (const NxLibException &ex,
 }
 
 
+
 pcl::EnsensoGrabber::EnsensoGrabber () :
     device_open_ (false),
     tcp_open_ (false),
@@ -654,24 +655,32 @@ bool pcl::EnsensoGrabber::getCameraInfo(std::string cam, sensor_msgs::CameraInfo
     {
       for(std::size_t j = 0; j < 3; ++j)
       {
-        cam_info.K[3*i+j] = camera_[itmCalibration][itmMonocular][cam][itmCamera][j][i].asDouble();
-        cam_info.R[3*i+j] = camera_[itmCalibration][itmDynamic][itmStereo][cam][itmRotation][j][i].asDouble();
-        cam_info.P[3*i+j] = camera_[itmCalibration][itmDynamic][itmStereo][cam][itmCamera][j][i].asDouble();
+        cam_info.K[3*i+j] = camera_[itmCalibration][itmMonocular][cam][itmCamera][j][i].asDouble(); 
+        cam_info.R[3*i+j] = camera_[itmCalibration][itmDynamic][itmStereo][cam][itmRotation][j][i].asDouble(); 
       }
     }
     // Ensenso has all the units in millimetres. Change them to meters.
     double factor = 1000.;
     int idxs[] = {0,2,4,5};
     for(std::size_t i = 0; i < 4; ++i)
-    {
       cam_info.K[idxs[i]] /= factor;
-      cam_info.P[idxs[i]] /= factor;
-    }
+    cam_info.P[0] = camera_[itmCalibration][itmDynamic][itmStereo][cam][itmCamera][0][0].asDouble() / factor;
+    cam_info.P[1] = camera_[itmCalibration][itmDynamic][itmStereo][cam][itmCamera][1][0].asDouble();
+    cam_info.P[2] = camera_[itmCalibration][itmDynamic][itmStereo][cam][itmCamera][2][0].asDouble() / factor;
+    cam_info.P[3] = 0.0;
+    cam_info.P[4] = camera_[itmCalibration][itmDynamic][itmStereo][cam][itmCamera][0][1].asDouble();
+    cam_info.P[5] = camera_[itmCalibration][itmDynamic][itmStereo][cam][itmCamera][1][1].asDouble() / factor;
+    cam_info.P[6] = camera_[itmCalibration][itmDynamic][itmStereo][cam][itmCamera][2][1].asDouble() / factor;
+    cam_info.P[7] = 0.0;
+    cam_info.P[10] = 1.0;
+    
+    
+
     if (cam == "Right")
     {
       double B = camera_[itmCalibration][itmStereo][itmBaseline].asDouble() / factor;
       double fx = cam_info.P[0];
-      cam_info.P[3] = (-fx * B);
+      cam_info.P[3] = (-fx * B) / factor;
     }
     return true;
   }
