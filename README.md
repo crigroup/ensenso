@@ -97,7 +97,7 @@ $ git clone https://github.com/ros-perception/perception_pcl.git -b $ROS_DISTRO-
 $ git clone https://github.com/crigroup/ensenso.git
 ``` 
 
-You need to make `ros_pcl` depend on **PCL 1.8.0**. In the file `pcl_ros/CMakeLists.txt` locate the line that contains this:
+You need to make `pcl_ros` depend on **PCL 1.8.0**. In the file `~/catkin_ws/perception_pcl/pcl_ros/CMakeLists.txt` locate the line that contains this:
 ```{bash}
 find_package(PCL REQUIRED)
 ``` 
