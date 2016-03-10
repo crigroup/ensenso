@@ -97,7 +97,7 @@ $ git clone https://github.com/ros-perception/perception_pcl.git -b $ROS_DISTRO-
 $ git clone https://github.com/crigroup/ensenso.git
 ``` 
 
-You need to make `pcl_ros` depend on **PCL 1.8.0**. In the file `~/catkin_ws/perception_pcl/pcl_ros/CMakeLists.txt` locate the line that contains this:
+You need to make `pcl_ros` depend on **PCL 1.8.0**. In the file `~/catkin_ws/src/perception_pcl/pcl_ros/CMakeLists.txt` locate the line that contains this:
 ```{bash}
 find_package(PCL REQUIRED)
 ``` 
@@ -137,20 +137,32 @@ Troubleshooting
 
 ### `OpenNI2` linking error
 
-If you get errors related to `OpenNI2` when building `pcl` set the `WITH_OPENNI2` compilation flag to `OFF`:
+If you get errors related to `OpenNI2` or `boost version required 1.47` when building `pcl` set the `WITH_OPENNI2` compilation flag to `OFF`:
 ```{bash}
 $ cmake -DCMAKE_BUILD_TYPE=Release -DWITH_OPENNI2=OFF .. 
 ``` 
 
 ### `VLPGrabber` Linking error
 
-In the file `pcl/io/CMakeLists.txt` comment out the source file `src/vlp_grabber.cpp`.
+In the file `~/git/pcl/io/CMakeLists.txt` comment out the source file `src/vlp_grabber.cpp`.
 
-Additionally, in the file `pcl/visualization/tools/CMakeLists.txt` comment out these two lines:
+Additionally, in the file `~/git/pcl/visualization/tools/CMakeLists.txt` comment out these two lines:
 ```{bash}
 PCL_ADD_EXECUTABLE(pcl_vlp_viewer ${SUBSYS_NAME} vlp_viewer.cpp)
 target_link_libraries(pcl_vlp_viewer pcl_io pcl_common pcl_visualization)
 ``` 
+
+### Compile errors with Assembler messages
+
+If you get errors like these while compiling PCL:
+```{bash}
+/tmp/ccRLy4Re.s:2488: Error: no such instruction: `vfmadd312ss (%r9),%xmm2,%xmm1'
+/tmp/ccRLy4Re.s:2638: Error: no such instruction: `vfmadd312ss (%rdx),%xmm2,%xmm1'
+/tmp/ccRLy4Re.s:3039: Error: no such instruction: `vfmadd312ss (%rax,%r11,4),%xmm5,%xmm1'
+/tmp/ccRLy4Re.s:3402: Error: no such instruction: `vfmadd312ss (%rax,%r11,4),%xmm5,%xmm1'
+/tmp/ccRLy4Re.s:3534: Error: no such instruction: `vfmadd312ss (%rax,%rdx,4),%xmm1,%xmm2'
+``` 
+Please refer to [these answers](http://stackoverflow.com/questions/17126593/compile-errors-with-assembler-messages). For the `dellstation` (Ubuntu 12.04), I had to use: `-march=native -mno-avx`.
 
 ### Cannot connect to the camera
 
