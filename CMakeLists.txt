@@ -24,6 +24,7 @@ add_service_files(
   AXXBsolver.srv
   CalibrationMoveRandom.srv
   CameraLights.srv
+  PanelDetector.srv
 )
 
 generate_messages(
