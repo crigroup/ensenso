@@ -1,4 +1,4 @@
-bool  start
+bool start
 --- 
 bool success
 geometry_msgs/Vector3 center

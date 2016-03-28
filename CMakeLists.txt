@@ -25,6 +25,7 @@ add_service_files(
   CalibrationMoveRandom.srv
   CameraLights.srv
   PanelDetector.srv
+  HoleDetector.srv
 )
 
 generate_messages(
