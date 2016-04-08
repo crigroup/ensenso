@@ -63,20 +63,9 @@ add_library(ensenso_grabber src/ensenso_grabber.cpp)
 target_link_libraries(ensenso_grabber ${PCL_LIBRARIES} ${catkin_LIBRARIES})
 
 add_executable(ensenso_node src/ensenso_node.cpp)
-add_dependencies(ensenso_node ${PROJECT_NAME}_gencpp)
+add_dependencies(ensenso_node ${catkin_EXPORTED_TARGETS})
 target_link_libraries(ensenso_node ensenso_grabber ${PCL_LIBRARIES} ${catkin_LIBRARIES})
 
-#add_executable(find_plate src/find_plate.cpp)
-#target_link_libraries(find_plate  ensenso_grabber ${PCL_LIBRARIES} ${catkin_LIBRARIES})
-
-#add_executable(metal_plate src/metal_plate.cpp)
-#add_dependencies(metal_plate ${PROJECT_NAME}_gencpp)
-#target_link_libraries(metal_plate ensenso_grabber${PCL_LIBRARIES} ${catkin_LIBRARIES})
-
-add_executable(handeye_calibration src/handeye_calibration.cpp)
-add_dependencies(handeye_calibration ${PROJECT_NAME}_gencpp)
-target_link_libraries(handeye_calibration ensenso_grabber ${PCL_LIBRARIES} ${catkin_LIBRARIES})
-
-add_executable(handeye_calibration_pre src/handeye_calibration_pre.cpp)
-add_dependencies(handeye_calibration_pre ${PROJECT_NAME}_gencpp)
-target_link_libraries(handeye_calibration_pre ensenso_grabber ${PCL_LIBRARIES} ${catkin_LIBRARIES})
+add_executable(ensenso_calibration_server src/ensenso_calibration_server.cpp)
+add_dependencies(ensenso_calibration_server ${catkin_EXPORTED_TARGETS})
+target_link_libraries(ensenso_calibration_server ensenso_grabber ${PCL_LIBRARIES} ${catkin_LIBRARIES})

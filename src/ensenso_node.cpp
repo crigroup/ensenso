@@ -64,10 +64,10 @@ class EnsensoNode
       nh_private_("~")
     {
       // Read parameters
-      std::string serial_no;
-      nh_private_.param(std::string("serial_no"), serial_no, std::string("150533"));
-      if (!nh_private_.hasParam("serial_no"))
-        ROS_WARN_STREAM("Parameter [~serial_no] not found, using default: " << serial_no);
+      std::string serial;
+      nh_private_.param(std::string("serial"), serial, std::string("150534"));
+      if (!nh_private_.hasParam("serial"))
+        ROS_WARN_STREAM("Parameter [~serial] not found, using default: " << serial);
       nh_private_.param("camera_frame_id", camera_frame_id_, std::string("ensenso_optical_frame"));
       if (!nh_private_.hasParam("camera_frame_id"))
         ROS_WARN_STREAM("Parameter [~camera_frame_id] not found, using default: " << camera_frame_id_);
@@ -96,7 +96,7 @@ class EnsensoNode
       ligths_srv_ = nh_.advertiseService("camera_lights", &EnsensoNode::cameraLigthsCB, this);
       // Initialize Ensenso
       ensenso_ptr_.reset(new pcl::EnsensoGrabber);
-      ensenso_ptr_->openDevice(serial_no);
+      ensenso_ptr_->openDevice(serial);
       ensenso_ptr_->openTcpPort();
       ensenso_ptr_->configureCapture();
       ensenso_ptr_->enableProjector(projector);
