@@ -370,10 +370,12 @@ bool pcl::EnsensoGrabber::estimateCalibrationPatternPose (Eigen::Affine3d &patte
 
 bool pcl::EnsensoGrabber::computeCalibrationMatrix (const std::vector<Eigen::Affine3d, Eigen::aligned_allocator<Eigen::Affine3d> > &robot_poses,
                                                     std::string &json,
+                                                    std::string &reprojection_error,
                                                     const std::string setup,
                                                     const std::string target,
                                                     const Eigen::Affine3d &guess_tf,
-                                                    const bool pretty_format) const
+                                                    const bool pretty_format
+                                                    ) const
 {
     if ( (*root_)[itmVersion][itmMajor] < 2 && (*root_)[itmVersion][itmMinor] < 3)
         PCL_WARN ("EnsensoSDK 1.3.x fixes bugs into extrinsic calibration matrix optimization, please update your SDK!\n"
@@ -445,7 +447,7 @@ bool pcl::EnsensoGrabber::computeCalibrationMatrix (const std::vector<Eigen::Aff
             // json = calibrate.result ().asJson (pretty_format);
             // Use this line if u want to recieve only Link
             json = calibrate.result ()["Link"].asJson (pretty_format);
-
+            reprojection_error = calibrate.result ()["ReprojectionError"].asJson (pretty_format);
             return (true);
         }
         else
@@ -519,7 +521,7 @@ bool pcl::EnsensoGrabber::setExtrinsicCalibration (const double euler_angle,
     if (!device_open_)
         return (false);
 
-    if (rotation_axis != Eigen::Vector3d (0, 0, 0))                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        // Otherwise the vector becomes NaN
+    if (rotation_axis != Eigen::Vector3d (0, 0, 0))                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    // Otherwise the vector becomes NaN
         rotation_axis.normalize ();
 
     try

@@ -176,11 +176,12 @@ public:
      * If you want to permanently store the result, use @ref storeEEPROMExtrinsicCalibration. */
     bool
     computeCalibrationMatrix (const std::vector<Eigen::Affine3d, Eigen::aligned_allocator<Eigen::Affine3d> > &robot_poses,
-                              std::string &json,
+                              std::string &json,std::string &reprojection_error,
                               const std::string setup = "Moving",  // Default values: Moving or Fixed
                               const std::string target = "Hand",  // Default values: Hand or Workspace
                               const Eigen::Affine3d &guess_tf = Eigen::Affine3d::Identity (),
-                              const bool pretty_format = true) const;
+                              const bool pretty_format = true
+                              ) const;
 
     /** @brief Copy the link defined in the Link node of the nxTree to the EEPROM
      * @return True if successful, false otherwise

@@ -61,7 +61,7 @@ public:
 
         // Initialize calibration
         float grid_spacing = 12.5;
-        int num_pose = 5;
+        int num_pose = 50;
         bool store_to_eeprom = true;
         Eigen::Matrix4d pattern_pose;
         pattern_pose << 0,0,1,-1,
@@ -137,7 +137,7 @@ public:
                     ROS_ERROR("Random_move: failed to plan the robot!");
                     return false;
                 }
-                sleep(0.5);
+                sleep(1.5);
                 // Collect pattern pose
                 ensenso_ptr_->stop();
                 if (ensenso_ptr_->captureCalibrationPattern() == -1)
@@ -159,44 +159,55 @@ public:
         sleep(1);
 
         // Compute calibration matrix
-        // TODO: Add guess calibration support
         ROS_INFO("Computing calibration matrix...");
+        Eigen::Affine3d guess_tf;
+        guess_tf.matrix() << -0.0182116, -0.99982, 0.00533313,  -0.015589,
+        0.999794,   -0.018163,  0.00902611,   0.0318745,
+        -0.00892761,  0.00549641,    0.999945, -0.00122719,
+        0,           0,          0,          1;
         std::string result;
-
-        if (!ensenso_ptr_->computeCalibrationMatrix(robot_poses, result, "Moving", "Hand"))
+        std::string reprojection_error;
+        if (!ensenso_ptr_->computeCalibrationMatrix(robot_poses, result,reprojection_error, "Moving", "Hand",guess_tf))
         {
             ROS_ERROR("Failed to compute calibration!");
             return false;
         }
         std::cout << "Result: " << result <<"\n";
-
-        // Store calibration matrix into EEPROM if required
-        if (store_to_eeprom)
-        {
-            if (!ensenso_ptr_->clearEEPROMExtrinsicCalibration())
+        std::cout << "Reprojection Error: " << reprojection_error << "\n";
+        double error = ::atof(reprojection_error.c_str());
+        if (error < 3.5) {
+            // Store calibration matrix into EEPROM if required
+            if (store_to_eeprom)
             {
-                ROS_INFO("Could not reset extrinsic calibration!");
+                if (!ensenso_ptr_->clearEEPROMExtrinsicCalibration())
+                {
+                    ROS_INFO("Could not reset extrinsic calibration!");
+                }
+                ensenso_ptr_->storeEEPROMExtrinsicCalibration();
+                ROS_INFO("Calibration computation successful and stored into the EEPROM");
+
             }
-            ensenso_ptr_->storeEEPROMExtrinsicCalibration();
-            ROS_INFO("Calibration computation successful and stored into the EEPROM");
+            else
+                ROS_INFO("Calibration computation successful!");
+
+            // test load calibration
+            Eigen::Affine3d matrix;
+            ensenso_ptr_->jsonTransformationToMatrix(result,matrix);
+            // Eigen::Affine3d matrix;
+            // ensenso_ptr_->loadEEPROMExtrinsicCalibration(matrix);
+            matrix.translation() = matrix.translation()/1000;
+            // std::cout << "Load previous calibration result:\ntrans" << matrix.translation() << "\nrot\n" << matrix.rotation() <<"\n";
+            //end test
+            std::ofstream file("camera_to_hand.tf");
+            if (file.is_open())
+            {
+                file << matrix.matrix() << '\n';
+                std::cout << "Save to file successfully\n";
+            }
+
         }
         else
-            ROS_INFO("Calibration computation successful!");
-
-        // test load calibration
-        Eigen::Affine3d matrix;
-        ensenso_ptr_->jsonTransformationToMatrix(result,matrix);
-        // Eigen::Affine3d matrix;
-        // ensenso_ptr_->loadEEPROMExtrinsicCalibration(matrix);
-        matrix.translation() = matrix.translation()/1000;
-        // std::cout << "Load previous calibration result:\ntrans" << matrix.translation() << "\nrot\n" << matrix.rotation() <<"\n";
-        //end test
-        std::ofstream file("camera_to_hand.tf");
-        if (file.is_open())
-        {
-            file << matrix.matrix() << '\n';
-            std::cout << "Save to file successfully\n";
-        }
+            ROS_ERROR("Reprojection Error is too large\n");
         return true;
     }
 };
