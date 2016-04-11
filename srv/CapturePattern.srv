@@ -1,0 +1,3 @@
+--- 
+int32   pattern_count
+bool    success

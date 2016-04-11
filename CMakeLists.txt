@@ -11,6 +11,7 @@ find_package(catkin REQUIRED COMPONENTS
   pcl_conversions
   pcl_ros
   std_msgs
+  std_srvs
   tf_conversions
   image_transport
 )
@@ -21,11 +22,11 @@ find_package(PCL 1.8.0 REQUIRED)
 
 add_service_files(
   FILES
-  AXXBsolver.srv
-  CalibrationMoveRandom.srv
   CameraLights.srv
-  PanelDetector.srv
-  HoleDetector.srv
+  CapturePattern.srv
+  ComputeCalibration.srv
+  GridSpacing.srv
+  SetBool.srv
 )
 
 generate_messages(
@@ -46,6 +47,7 @@ catkin_package(
     message_runtime
     geometry_msgs
     std_msgs
+    std_srvs
     pcl_conversions
     pcl_ros
     tf_conversions
@@ -65,7 +67,3 @@ target_link_libraries(ensenso_grabber ${PCL_LIBRARIES} ${catkin_LIBRARIES})
 add_executable(ensenso_node src/ensenso_node.cpp)
 add_dependencies(ensenso_node ${catkin_EXPORTED_TARGETS})
 target_link_libraries(ensenso_node ensenso_grabber ${PCL_LIBRARIES} ${catkin_LIBRARIES})
-
-add_executable(ensenso_calibration_server src/ensenso_calibration_server.cpp)
-add_dependencies(ensenso_calibration_server ${catkin_EXPORTED_TARGETS})
-target_link_libraries(ensenso_calibration_server ensenso_grabber ${PCL_LIBRARIES} ${catkin_LIBRARIES})

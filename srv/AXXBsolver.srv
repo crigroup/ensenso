@@ -1,4 +1,0 @@
-geometry_msgs/PoseArray  robotposes
-geometry_msgs/PoseArray  objwrtcamposes
----
-geometry_msgs/Pose       X

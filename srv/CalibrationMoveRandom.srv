@@ -1,6 +1,0 @@
-geometry_msgs/Pose  patternpose
-float64             minradius
-bool                gotoinitpose
----
-bool                success
-geometry_msgs/Pose  robotpose

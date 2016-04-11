@@ -266,7 +266,7 @@ bool pcl::EnsensoGrabber::grabSingleCloud (pcl::PointCloud<pcl::PointXYZ> &cloud
   }
 }
 
-bool pcl::EnsensoGrabber::initExtrinsicCalibration (const int grid_spacing) const
+bool pcl::EnsensoGrabber::initExtrinsicCalibration (const double grid_spacing) const
 {
   if (!device_open_)
     return (false);
@@ -323,7 +323,9 @@ int pcl::EnsensoGrabber::captureCalibrationPattern () const
   try
   {
     NxLibCommand (cmdCapture).execute ();
-    NxLibCommand (cmdCollectPattern).execute ();
+    NxLibCommand collect_pattern (cmdCollectPattern);
+    collect_pattern.parameters ()[itmBuffer].set (true);  // Store the pattern into the buffer
+    collect_pattern.execute ();
   }
   catch (NxLibException &ex)
   {
@@ -362,7 +364,8 @@ bool pcl::EnsensoGrabber::estimateCalibrationPatternPose (Eigen::Affine3d &patte
 
 bool pcl::EnsensoGrabber::computeCalibrationMatrix (const std::vector<Eigen::Affine3d, Eigen::aligned_allocator<Eigen::Affine3d> > &robot_poses,
                           std::string &json,
-                          std::string &reprojection_error,
+                          int &iterations,
+                          double &reprojection_error,
                           const std::string setup,
                           const std::string target,
                           const Eigen::Affine3d &guess_tf,
@@ -372,7 +375,8 @@ bool pcl::EnsensoGrabber::computeCalibrationMatrix (const std::vector<Eigen::Aff
   if ( (*root_)[itmVersion][itmMajor] < 2 && (*root_)[itmVersion][itmMinor] < 3)
     PCL_WARN ("EnsensoSDK 1.3.x fixes bugs into extrinsic calibration matrix optimization, please update your SDK!\n"
           "http://www.ensenso.de/support/sdk-download/\n");
-
+  
+  NxLibCommand calibrate (cmdCalibrateHandEye);
   try
   {
     std::vector<Eigen::Affine3d, Eigen::aligned_allocator<Eigen::Affine3d> > robot_poses_mm (robot_poses);
@@ -384,7 +388,6 @@ bool pcl::EnsensoGrabber::computeCalibrationMatrix (const std::vector<Eigen::Aff
       if (!matrixTransformationToJson (robot_poses_mm[i], robot_poses_json[i]))
         return (false);
     }
-    NxLibCommand calibrate (cmdCalibrateHandEye);
     // Set Hand-Eye calibration parameters
     if (boost::iequals (setup, "Fixed"))
       calibrate.parameters ()[itmSetup].set (valFixed);
@@ -430,12 +433,11 @@ bool pcl::EnsensoGrabber::computeCalibrationMatrix (const std::vector<Eigen::Aff
 
     calibrate.execute ();  // Might take up to 120 sec (maximum allowed by Ensenso API)
 
-    if (calibrate.successful ())
+    if (calibrate.successful())
     {
-      // json = calibrate.result ().asJson (pretty_format);
-      // Use this line if u want to recieve only Link
-      json = calibrate.result ()["Link"].asJson (pretty_format);
-      reprojection_error = calibrate.result ()["ReprojectionError"].asJson (pretty_format);
+      json = calibrate.result()[itmLink].asJson (pretty_format);
+      iterations = calibrate.result()[itmIterations].asInt();
+      reprojection_error = calibrate.result()[itmReprojectionError].asDouble();
       return (true);
     }
     else
@@ -447,6 +449,10 @@ bool pcl::EnsensoGrabber::computeCalibrationMatrix (const std::vector<Eigen::Aff
   catch (NxLibException &ex)
   {
     ensensoExceptionHandling (ex, "computeCalibrationMatrix");
+    int iters = calibrate.result()[itmIterations].asInt();
+    double error = calibrate.result()[itmReprojectionError].asDouble();
+    ROS_WARN("computeCalibrationMatrix Failed. Iterations: %d, Reprojection error: %.2f", iters, error);
+    ROS_WARN_STREAM("Result: " << std::endl << calibrate.result()[itmLink].asJson(true));
     return (false);
   }
 }
@@ -622,6 +628,29 @@ std::string pcl::EnsensoGrabber::getResultAsJson (const bool pretty_format) cons
     ensensoExceptionHandling (ex, "getResultAsJson");
     return ("");
   }
+}
+
+double pcl::EnsensoGrabber::getPatternGridSpacing () const
+{
+  if (!device_open_)
+    return (-1);
+  if (running_)
+    return (-1);
+  NxLibCommand collect_pattern (cmdCollectPattern);
+  try
+  {
+    NxLibCommand (cmdCapture).execute ();
+    collect_pattern.parameters ()[itmBuffer].set (false);
+    collect_pattern.parameters ()[itmDecodeData].set (true);
+    collect_pattern.execute ();
+  }
+  catch (NxLibException &ex)
+  {
+    ensensoExceptionHandling (ex, "getPatternGridSpacing");
+    return (-1);
+  }
+
+  return collect_pattern.result()[itmGridSpacing].asDouble();
 }
 
 bool pcl::EnsensoGrabber::enableFrontLight(const bool enable) const
@@ -875,31 +904,32 @@ bool pcl::EnsensoGrabber::matrixTransformationToJson (const Eigen::Affine3d &mat
 {
   try
   {
-    NxLibCommand convert_transformation (cmdConvertTransformation);
+    NxLibCommand convert (cmdConvertTransformation);
+    
     // Rotation
-    convert_transformation.parameters ()[itmTransformation][0][0].set (matrix.linear ().col (0)[0]);
-    convert_transformation.parameters ()[itmTransformation][0][1].set (matrix.linear ().col (0)[1]);
-    convert_transformation.parameters ()[itmTransformation][0][2].set (matrix.linear ().col (0)[2]);
-    convert_transformation.parameters ()[itmTransformation][0][3].set (0.0);
+    convert.parameters ()[itmTransformation][0][0].set (matrix.linear ().col (0)[0]);
+    convert.parameters ()[itmTransformation][0][1].set (matrix.linear ().col (0)[1]);
+    convert.parameters ()[itmTransformation][0][2].set (matrix.linear ().col (0)[2]);
+    convert.parameters ()[itmTransformation][0][3].set (0.0);
     
-    convert_transformation.parameters ()[itmTransformation][1][0].set (matrix.linear ().col (1)[0]);
-    convert_transformation.parameters ()[itmTransformation][1][1].set (matrix.linear ().col (1)[1]);
-    convert_transformation.parameters ()[itmTransformation][1][2].set (matrix.linear ().col (1)[2]);
-    convert_transformation.parameters ()[itmTransformation][1][3].set (0.0);
+    convert.parameters ()[itmTransformation][1][0].set (matrix.linear ().col (1)[0]);
+    convert.parameters ()[itmTransformation][1][1].set (matrix.linear ().col (1)[1]);
+    convert.parameters ()[itmTransformation][1][2].set (matrix.linear ().col (1)[2]);
+    convert.parameters ()[itmTransformation][1][3].set (0.0);
     
-    convert_transformation.parameters ()[itmTransformation][2][0].set (matrix.linear ().col (2)[0]);
-    convert_transformation.parameters ()[itmTransformation][2][1].set (matrix.linear ().col (2)[1]);
-    convert_transformation.parameters ()[itmTransformation][2][2].set (matrix.linear ().col (2)[2]);
-    convert_transformation.parameters ()[itmTransformation][2][3].set (0.0);
+    convert.parameters ()[itmTransformation][2][0].set (matrix.linear ().col (2)[0]);
+    convert.parameters ()[itmTransformation][2][1].set (matrix.linear ().col (2)[1]);
+    convert.parameters ()[itmTransformation][2][2].set (matrix.linear ().col (2)[2]);
+    convert.parameters ()[itmTransformation][2][3].set (0.0);
     
     // Translation
-    convert_transformation.parameters ()[itmTransformation][3][0].set (matrix.translation ()[0]);
-    convert_transformation.parameters ()[itmTransformation][3][1].set (matrix.translation ()[1]);
-    convert_transformation.parameters ()[itmTransformation][3][2].set (matrix.translation ()[2]);
-    convert_transformation.parameters ()[itmTransformation][3][3].set (1.0);
+    convert.parameters ()[itmTransformation][3][0].set (matrix.translation ()[0]);
+    convert.parameters ()[itmTransformation][3][1].set (matrix.translation ()[1]);
+    convert.parameters ()[itmTransformation][3][2].set (matrix.translation ()[2]);
+    convert.parameters ()[itmTransformation][3][3].set (1.0);
     
-    convert_transformation.execute ();
-    json = convert_transformation.result ()[itmTransformation].asJson (pretty_format);
+    convert.execute ();
+    json = convert.result ()[itmTransformation].asJson (pretty_format);
     return (true);
   }
   catch (NxLibException &ex)

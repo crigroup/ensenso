@@ -142,7 +142,7 @@ public:
      * @note [GridSize](http://www.ensenso.de/manual/index.html?gridsize.htm) item is protected in the NxTree, you can't modify it.
      */
     bool
-    initExtrinsicCalibration (const int grid_spacing) const;
+    initExtrinsicCalibration (const double grid_spacing) const;
 
     /** @brief Clear calibration patterns buffer */
     bool
@@ -176,7 +176,9 @@ public:
      * If you want to permanently store the result, use @ref storeEEPROMExtrinsicCalibration. */
     bool
     computeCalibrationMatrix (const std::vector<Eigen::Affine3d, Eigen::aligned_allocator<Eigen::Affine3d> > &robot_poses,
-                              std::string &json,std::string &reprojection_error,
+                              std::string &json,
+                              int &iterations,
+                              double &reprojection_error,
                               const std::string setup = "Moving",  // Default values: Moving or Fixed
                               const std::string target = "Hand",  // Default values: Hand or Workspace
                               const Eigen::Affine3d &guess_tf = Eigen::Affine3d::Identity (),
@@ -358,6 +360,7 @@ public:
                                      std::string &json,
                                      const bool pretty_format = true) const;
 
+    double getPatternGridSpacing() const;
     bool enableFrontLight(const bool enable) const;
     bool enableProjector(const bool enable) const;
 
