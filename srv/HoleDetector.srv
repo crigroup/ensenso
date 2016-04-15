@@ -1,0 +1,8 @@
+bool start
+geometry_msgs/Vector3 center
+geometry_msgs/Vector3 ua
+geometry_msgs/Vector3 ub
+--- 
+bool success
+geometry_msgs/Point32[] holes
+geometry_msgs/Point32 normal

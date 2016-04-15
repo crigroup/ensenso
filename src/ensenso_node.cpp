@@ -29,6 +29,7 @@
 #include <ensenso/CameraLights.h>
 #include <ensenso/CapturePattern.h>
 #include <ensenso/ComputeCalibration.h>
+#include <ensenso/ConfigureStreaming.h>
 #include <ensenso/GridSpacing.h>
 #include <ensenso/SetBool.h>
 #include <std_srvs/Trigger.h>
@@ -51,6 +52,7 @@ class EnsensoNode
     ros::ServiceServer                init_cal_srv_;
     ros::ServiceServer                ligths_srv_;
     ros::ServiceServer                start_srv_;
+    ros::ServiceServer                configure_srv_;
     // Images
     image_transport::CameraPublisher  l_raw_pub_;
     image_transport::CameraPublisher  r_raw_pub_;
@@ -66,6 +68,7 @@ class EnsensoNode
     // TF
     std::string                       camera_frame_id_;
     // Ensenso grabber
+    boost::signals2::connection       connection_;
     pcl::EnsensoGrabber::Ptr          ensenso_ptr_;
     
   public:
@@ -97,8 +100,7 @@ class EnsensoNode
       r_raw_pub_ = it.advertiseCamera("right/image_raw", 2);
       l_rectified_pub_ = it.advertise("left/image_rect", 2);
       r_rectified_pub_ = it.advertise("right/image_rect", 2);
-      if (point_cloud_)
-        cloud_pub_ = nh_.advertise<sensor_msgs::PointCloud2 >("depth/points", 2, true); // Latched
+      cloud_pub_ = nh_.advertise<sensor_msgs::PointCloud2 >("depth/points", 2, true); // Latched
       linfo_pub_=nh_.advertise<sensor_msgs::CameraInfo> ("left/camera_info", 2, true);
       rinfo_pub_=nh_.advertise<sensor_msgs::CameraInfo> ("right/camera_info", 2, true);
       // Initialize Ensenso
@@ -109,17 +111,11 @@ class EnsensoNode
       ensenso_ptr_->enableProjector(projector);
       ensenso_ptr_->enableFrontLight(front_light);
       // Start ensenso grabber
-      boost::function<void(
-          const boost::shared_ptr<PointCloudXYZ>&, 
-          const boost::shared_ptr<PairOfImages>&,
-          const boost::shared_ptr<PairOfImages>&)> f1 = boost::bind (&EnsensoNode::grabberCallback, this, _1, _2, _3);
-      boost::function<void(
-          const boost::shared_ptr<PairOfImages>&,
-          const boost::shared_ptr<PairOfImages>&)> f2 = boost::bind (&EnsensoNode::grabberCallback, this, _1, _2);
-      if (point_cloud_)
-        ensenso_ptr_->registerCallback(f1);
-      else
-        ensenso_ptr_->registerCallback(f2);
+      ensenso::ConfigureStreaming::Request req;
+      ensenso::ConfigureStreaming::Response res;
+      req.cloud = point_cloud_;
+      req.images = true;
+      configureStreamingCB(req, res);
       ensenso_ptr_->start();
       // Advertise services
       ligths_srv_ = nh_.advertiseService("camera_lights", &EnsensoNode::cameraLigthsCB, this);
@@ -127,7 +123,8 @@ class EnsensoNode
       grid_spacing_srv_ = nh_.advertiseService("grid_spacing", &EnsensoNode::gridSpacingCB, this);
       capture_srv_ = nh_.advertiseService("capture_pattern", &EnsensoNode::capturePatternCB, this);
       calibrate_srv_ = nh_.advertiseService("compute_calibration", &EnsensoNode::computeCalibrationCB, this);
-      start_srv_ = nh_.advertiseService("start_streaming", &EnsensoNode::startStreamCB, this);
+      configure_srv_ = nh_.advertiseService("configure_streaming", &EnsensoNode::configureStreamingCB, this);
+      start_srv_ = nh_.advertiseService("start_streaming", &EnsensoNode::startStreamingCB, this);
     }
     
     ~EnsensoNode()
@@ -198,6 +195,41 @@ class EnsensoNode
       return true;
     }
     
+    bool configureStreamingCB(ensenso::ConfigureStreaming::Request& req, ensenso::ConfigureStreaming::Response &res)
+    {
+      bool was_running = ensenso_ptr_->isRunning();
+      if (was_running)
+        ensenso_ptr_->stop();
+      // Disconnect previous connection
+      connection_.disconnect();
+      // Connect new signals
+      if (req.cloud && req.images)
+      {
+        boost::function<void(
+          const boost::shared_ptr<PointCloudXYZ>&, 
+          const boost::shared_ptr<PairOfImages>&,
+          const boost::shared_ptr<PairOfImages>&)> f = boost::bind (&EnsensoNode::grabberCallback, this, _1, _2, _3);
+        connection_ = ensenso_ptr_->registerCallback(f);
+      }
+      else if (req.images)
+      {
+        boost::function<void(
+          const boost::shared_ptr<PairOfImages>&,
+          const boost::shared_ptr<PairOfImages>&)> f = boost::bind (&EnsensoNode::grabberCallback, this, _1, _2);
+        connection_ = ensenso_ptr_->registerCallback(f);
+      }
+      else if (req.cloud)
+      {
+        boost::function<void(
+            const boost::shared_ptr<PointCloudXYZ>&)> f = boost::bind (&EnsensoNode::grabberCallback, this, _1);
+        connection_ = ensenso_ptr_->registerCallback(f);
+      }
+      if (was_running)
+        ensenso_ptr_->start();
+      res.success = true;
+      return true;
+    }
+    
     bool gridSpacingCB (ensenso::GridSpacing::Request& req, ensenso::GridSpacing::Response &res)
     {
       bool was_running = ensenso_ptr_->isRunning();
@@ -225,7 +257,7 @@ class EnsensoNode
       return true;
     }
     
-    bool startStreamCB(ensenso::SetBool::Request& req, ensenso::SetBool::Response &res)
+    bool startStreamingCB(ensenso::SetBool::Request& req, ensenso::SetBool::Response &res)
     {
       if (req.data)
         ensenso_ptr_->start();
@@ -233,6 +265,15 @@ class EnsensoNode
         ensenso_ptr_->stop();
       res.success = true;
       return true;
+    }
+    
+    void grabberCallback( const boost::shared_ptr<PointCloudXYZ>& cloud)
+    {
+      // Point cloud
+      cloud->header.frame_id = camera_frame_id_;
+      sensor_msgs::PointCloud2 cloud_msg;
+      pcl::toROSMsg(*cloud, cloud_msg);
+      cloud_pub_.publish(cloud_msg);
     }
     
     void grabberCallback( const boost::shared_ptr<PairOfImages>& rawimages, const boost::shared_ptr<PairOfImages>& rectifiedimages)

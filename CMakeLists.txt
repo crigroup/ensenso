@@ -25,8 +25,11 @@ add_service_files(
   CameraLights.srv
   CapturePattern.srv
   ComputeCalibration.srv
+  ConfigureStreaming.srv
   GridSpacing.srv
   SetBool.srv
+  HoleDetector.srv
+  PanelDetector.srv
 )
 
 generate_messages(
