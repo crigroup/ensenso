@@ -43,6 +43,11 @@ PCL 1.8
 
 You need at least **PCL 1.8.0** to be able to use the Ensenso cameras. To do so, you need to install PCL from source.
 
+### Dependencies
+```{bash}
+$ sudo apt-get install g++ libboost-all-dev libeigen3-dev libflann-dev libvtk5-dev python-vtk libvtk5-qt4-dev libvtk-java libqhull-dev libgomp1 libpcap-dev
+```
+
 ### Source Code
 
 Clone the PCL repository:
