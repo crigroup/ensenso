@@ -27,8 +27,8 @@ Ensenso Drivers
 
 The Ensenso drivers are available for download here: <http://www.ensenso.com/support/sdk-download/>. You need to install 2 things:
 
--   uEye Driver
--   EnsensoSDK
+-   uEye Driver **4.72**
+-   EnsensoSDK **1.3.180**
 
 **Note:** We have the **ethernet** version, so install the corresponding drivers.
 
