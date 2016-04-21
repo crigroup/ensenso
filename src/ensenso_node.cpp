@@ -26,7 +26,7 @@
 // Ensenso grabber
 #include <ensenso/ensenso_grabber.h>
 // Services
-#include <ensenso/CameraLights.h>
+#include <ensenso/Lights.h>
 #include <ensenso/CapturePattern.h>
 #include <ensenso/ComputeCalibration.h>
 #include <ensenso/ConfigureStreaming.h>
@@ -118,12 +118,12 @@ class EnsensoNode
       configureStreamingCB(req, res);
       ensenso_ptr_->start();
       // Advertise services
-      ligths_srv_ = nh_.advertiseService("camera_lights", &EnsensoNode::cameraLigthsCB, this);
-      init_cal_srv_ = nh_.advertiseService("init_calibration", &EnsensoNode::initCalibrationCB, this);
-      grid_spacing_srv_ = nh_.advertiseService("grid_spacing", &EnsensoNode::gridSpacingCB, this);
       capture_srv_ = nh_.advertiseService("capture_pattern", &EnsensoNode::capturePatternCB, this);
       calibrate_srv_ = nh_.advertiseService("compute_calibration", &EnsensoNode::computeCalibrationCB, this);
       configure_srv_ = nh_.advertiseService("configure_streaming", &EnsensoNode::configureStreamingCB, this);
+      grid_spacing_srv_ = nh_.advertiseService("grid_spacing", &EnsensoNode::gridSpacingCB, this);
+      init_cal_srv_ = nh_.advertiseService("init_calibration", &EnsensoNode::initCalibrationCB, this);
+      ligths_srv_ = nh_.advertiseService("lights", &EnsensoNode::ligthsCB, this);
       start_srv_ = nh_.advertiseService("start_streaming", &EnsensoNode::startStreamingCB, this);
     }
     
@@ -133,7 +133,7 @@ class EnsensoNode
       ensenso_ptr_->closeDevice();
     }
     
-    bool cameraLigthsCB(ensenso::CameraLights::Request& req, ensenso::CameraLights::Response &res)
+    bool ligthsCB(ensenso::Lights::Request& req, ensenso::Lights::Response &res)
     {
       ensenso_ptr_->enableProjector(req.projector);
       ensenso_ptr_->enableFrontLight(req.front_light);

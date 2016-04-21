@@ -22,14 +22,12 @@ find_package(PCL 1.8.0 REQUIRED)
 
 add_service_files(
   FILES
-  CameraLights.srv
   CapturePattern.srv
   ComputeCalibration.srv
   ConfigureStreaming.srv
   GridSpacing.srv
+  Lights.srv
   SetBool.srv
-  HoleDetector.srv
-  PanelDetector.srv
 )
 
 generate_messages(
