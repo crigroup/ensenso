@@ -448,12 +448,18 @@ bool pcl::EnsensoGrabber::computeCalibrationMatrix (const std::vector<Eigen::Aff
   }
   catch (NxLibException &ex)
   {
-    ensensoExceptionHandling (ex, "computeCalibrationMatrix");
-    int iters = calibrate.result()[itmIterations].asInt();
-    double error = calibrate.result()[itmReprojectionError].asDouble();
-    ROS_WARN("computeCalibrationMatrix Failed. Iterations: %d, Reprojection error: %.2f", iters, error);
-    ROS_WARN_STREAM("Result: " << std::endl << calibrate.result()[itmLink].asJson(true));
-    return (false);
+    try
+    {
+      int iters = calibrate.result()[itmIterations].asInt();
+      double error = calibrate.result()[itmReprojectionError].asDouble();
+      ROS_WARN("computeCalibrationMatrix Failed. Iterations: %d, Reprojection error: %.2f", iters, error);
+      ROS_WARN_STREAM("Result: " << std::endl << calibrate.result()[itmLink].asJson(true));
+      return (false);
+    }
+    catch (...) {
+      ensensoExceptionHandling (ex, "computeCalibrationMatrix");
+    } 
+    
   }
 }
 
