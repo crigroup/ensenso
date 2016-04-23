@@ -157,11 +157,15 @@ public:
 
     /** @brief Estimate the calibration pattern pose
      * @param[out] pattern_pose the calibration pattern pose
+     * @param[in] average Specifies if all pattern point coordinates in the buffer 
+     * should be averaged to produce a more precise pose measurement. This will only 
+     * produce a correct result if all patterns in the buffer originate from 
+     * multiple images of the same pattern in the same pose.
      * @return true if successful, false otherwise
      * @warning A device must be opened and must not be running.
      * @note At least one calibration pattern must have been captured before, use @ref captureCalibrationPattern before */
     bool
-    estimateCalibrationPatternPose (Eigen::Affine3d &pattern_pose) const;
+    estimateCalibrationPatternPose (Eigen::Affine3d &pattern_pose, const bool average=false) const;
 
     /** @brief Computes the calibration matrix using the collected patterns and the robot poses vector
      * @param[in] robot_poses A list of robot poses, 1 for each pattern acquired (in the same order)
@@ -193,10 +197,10 @@ public:
     bool
     storeEEPROMExtrinsicCalibration () const;
 
-    /** @brief Load  calibration parameters and save to a matrix
+    /** @brief Load  calibration parameters from the EEPROM for the camera to use them.
      * @return True if successful, false otherwise
      */
-    bool loadEEPROMExtrinsicCalibration (Eigen::Affine3d &matrix) const;
+    bool loadEEPROMExtrinsicCalibration () const;
 
 
     /** @brief Clear the extrinsic calibration stored in the EEPROM by writing an identity matrix

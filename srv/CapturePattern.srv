@@ -1,3 +1,5 @@
+bool                clear_buffer
 --- 
-int32   pattern_count
-bool    success
+int32               pattern_count
+bool                success
+geometry_msgs/Pose  pose

@@ -336,7 +336,7 @@ int pcl::EnsensoGrabber::captureCalibrationPattern () const
   return ( (*root_)[itmParameters][itmPatternCount].asInt ());
 }
 
-bool pcl::EnsensoGrabber::estimateCalibrationPatternPose (Eigen::Affine3d &pattern_pose) const
+bool pcl::EnsensoGrabber::estimateCalibrationPatternPose (Eigen::Affine3d &pattern_pose, const bool average) const
 {
   if (!device_open_)
     return (false);
@@ -347,6 +347,8 @@ bool pcl::EnsensoGrabber::estimateCalibrationPatternPose (Eigen::Affine3d &patte
   try
   {
     NxLibCommand estimate_pattern_pose (cmdEstimatePatternPose);
+    estimate_pattern_pose.parameters ()[itmAverage].set (average);
+    
     estimate_pattern_pose.execute ();
     NxLibItem tf = estimate_pattern_pose.result ()[itmPatternPose];
     // Convert tf into a matrix
@@ -438,6 +440,8 @@ bool pcl::EnsensoGrabber::computeCalibrationMatrix (const std::vector<Eigen::Aff
       json = calibrate.result()[itmLink].asJson (pretty_format);
       iterations = calibrate.result()[itmIterations].asInt();
       reprojection_error = calibrate.result()[itmReprojectionError].asDouble();
+      ROS_INFO("computeCalibrationMatrix succeeded. Iterations: %d, Reprojection error: %.2f", iterations, reprojection_error);
+      ROS_INFO_STREAM("Result: " << std::endl << json);
       return (true);
     }
     else
@@ -478,16 +482,14 @@ bool pcl::EnsensoGrabber::storeEEPROMExtrinsicCalibration () const
   }
 }
 
-bool pcl::EnsensoGrabber::loadEEPROMExtrinsicCalibration (Eigen::Affine3d &matrix) const
+bool pcl::EnsensoGrabber::loadEEPROMExtrinsicCalibration () const
 {
   try
   {
     NxLibCommand load (cmdLoadCalibration);
     load.parameters ()[itmCameras] = camera_[itmSerialNumber].asString ();
     load.execute ();
-    NxLibItem calib_json = load.result()["Link"];
-    if (!jsonTransformationToMatrix (calib_json.asJson(),matrix))
-      return (true);
+    return (true);
   }
   catch (NxLibException &ex)
   {

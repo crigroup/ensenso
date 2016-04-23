@@ -146,8 +146,20 @@ class EnsensoNode
       bool was_running = ensenso_ptr_->isRunning();
       if (was_running)
         ensenso_ptr_->stop();
+      if (req.clear_buffer)
+      {
+        if (!ensenso_ptr_->clearCalibrationPatternBuffer ())
+          return true;
+      }
       res.pattern_count = ensenso_ptr_->captureCalibrationPattern();
       res.success = (res.pattern_count != -1);
+      if (res.success)
+      {
+        // Pattern pose
+        Eigen::Affine3d pattern_pose;
+        ensenso_ptr_->estimateCalibrationPatternPose(pattern_pose);
+        tf::poseEigenToMsg(pattern_pose, res.pose);
+      }
       if (was_running)
         ensenso_ptr_->start();
       return true;
@@ -164,6 +176,7 @@ class EnsensoNode
         Eigen::Affine3d pose;
         tf::poseMsgToEigen(req.robotposes.poses[i], pose);
         poses.push_back(pose);
+        ROS_INFO_STREAM(pose.matrix());
       }
       Eigen::Affine3d seed;
       tf::poseMsgToEigen(req.seed, seed);
