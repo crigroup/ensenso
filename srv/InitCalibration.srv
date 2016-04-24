@@ -1,0 +1,5 @@
+float64 grid_spacing
+---
+bool    success
+string  message
+float64 used_grid_spacing

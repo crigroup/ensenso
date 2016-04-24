@@ -26,6 +26,7 @@ add_service_files(
   ComputeCalibration.srv
   ConfigureStreaming.srv
   GridSpacing.srv
+  InitCalibration.srv
   Lights.srv
   SetBool.srv
 )

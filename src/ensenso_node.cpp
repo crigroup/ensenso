@@ -31,6 +31,7 @@
 #include <ensenso/ComputeCalibration.h>
 #include <ensenso/ConfigureStreaming.h>
 #include <ensenso/GridSpacing.h>
+#include <ensenso/InitCalibration.h>
 #include <ensenso/SetBool.h>
 #include <std_srvs/Trigger.h>
 
@@ -176,7 +177,6 @@ class EnsensoNode
         Eigen::Affine3d pose;
         tf::poseMsgToEigen(req.robotposes.poses[i], pose);
         poses.push_back(pose);
-        ROS_INFO_STREAM(pose.matrix());
       }
       Eigen::Affine3d seed;
       tf::poseMsgToEigen(req.seed, seed);
@@ -255,15 +255,23 @@ class EnsensoNode
       return true;
     }
     
-    bool initCalibrationCB(std_srvs::Trigger::Request& req, std_srvs::Trigger::Response &res)
+    bool initCalibrationCB(ensenso::InitCalibration::Request& req, ensenso::InitCalibration::Response &res)
     {
       bool was_running = ensenso_ptr_->isRunning();
       if (was_running)
         ensenso_ptr_->stop();
-      double grid_spacing = ensenso_ptr_->getPatternGridSpacing();
-      if (grid_spacing > 0) {
-        ensenso_ptr_->initExtrinsicCalibration(grid_spacing);
+      // The grid_spacing value in the request has preference over the decode one
+      double spacing;
+      if (req.grid_spacing > 0)
+        spacing = req.grid_spacing;
+      else
+        spacing = ensenso_ptr_->getPatternGridSpacing();
+        
+      if (spacing > 0)
+      {
+        ensenso_ptr_->initExtrinsicCalibration(spacing);
         res.success = true;
+        res.used_grid_spacing = spacing;
       }
       if (was_running)
         ensenso_ptr_->start();
