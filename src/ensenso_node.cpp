@@ -20,7 +20,6 @@
 #include <opencv2/highgui/highgui.hpp>
 
 // PCL headers
-#include <pcl/common/colors.h>
 #include <pcl/common/transforms.h>
 
 // Ensenso grabber
@@ -84,14 +83,6 @@ class EnsensoNode
       nh_private_.param("camera_frame_id", camera_frame_id_, std::string("ensenso_optical_frame"));
       if (!nh_private_.hasParam("camera_frame_id"))
         ROS_WARN_STREAM("Parameter [~camera_frame_id] not found, using default: " << camera_frame_id_);
-      // Booleans
-      bool front_light, projector;
-      nh_private_.param("front_light", front_light, false);
-      if (!nh_private_.hasParam("front_light"))
-        ROS_WARN_STREAM("Parameter [~front_light] not found, using default: " << front_light);
-      nh_private_.param("projector", projector, false);
-      if (!nh_private_.hasParam("projector"))
-        ROS_WARN_STREAM("Parameter [~projector] not found, using default: " << projector);
       nh_private_.param("point_cloud", point_cloud_, false);
       if (!nh_private_.hasParam("point_cloud"))
         ROS_WARN_STREAM("Parameter [~point_cloud] not found, using default: " << point_cloud_);
@@ -109,8 +100,6 @@ class EnsensoNode
       ensenso_ptr_->openDevice(serial);
       ensenso_ptr_->openTcpPort();
       ensenso_ptr_->configureCapture();
-      ensenso_ptr_->enableProjector(projector);
-      ensenso_ptr_->enableFrontLight(front_light);
       // Start ensenso grabber
       ensenso::ConfigureStreaming::Request req;
       ensenso::ConfigureStreaming::Response res;
@@ -118,94 +107,12 @@ class EnsensoNode
       req.images = true;
       configureStreamingCB(req, res);
       ensenso_ptr_->start();
-      // Advertise services
-      capture_srv_ = nh_.advertiseService("capture_pattern", &EnsensoNode::capturePatternCB, this);
-      calibrate_srv_ = nh_.advertiseService("compute_calibration", &EnsensoNode::computeCalibrationCB, this);
-      configure_srv_ = nh_.advertiseService("configure_streaming", &EnsensoNode::configureStreamingCB, this);
-      grid_spacing_srv_ = nh_.advertiseService("grid_spacing", &EnsensoNode::gridSpacingCB, this);
-      init_cal_srv_ = nh_.advertiseService("init_calibration", &EnsensoNode::initCalibrationCB, this);
-      ligths_srv_ = nh_.advertiseService("lights", &EnsensoNode::ligthsCB, this);
-      start_srv_ = nh_.advertiseService("start_streaming", &EnsensoNode::startStreamingCB, this);
     }
     
     ~EnsensoNode()
     {
       ensenso_ptr_->closeTcpPort();
       ensenso_ptr_->closeDevice();
-    }
-    
-    bool ligthsCB(ensenso::Lights::Request& req, ensenso::Lights::Response &res)
-    {
-      ensenso_ptr_->enableProjector(req.projector);
-      ensenso_ptr_->enableFrontLight(req.front_light);
-      res.success = true;
-      return true;
-    }
-    
-    bool capturePatternCB(ensenso::CapturePattern::Request& req, ensenso::CapturePattern::Response &res)
-    {
-      bool was_running = ensenso_ptr_->isRunning();
-      if (was_running)
-        ensenso_ptr_->stop();
-      if (req.clear_buffer)
-      {
-        if (!ensenso_ptr_->clearCalibrationPatternBuffer ())
-          return true;
-      }
-      res.pattern_count = ensenso_ptr_->captureCalibrationPattern();
-      res.success = (res.pattern_count != -1);
-      if (res.success)
-      {
-        // Pattern pose
-        Eigen::Affine3d pattern_pose;
-        ensenso_ptr_->estimateCalibrationPatternPose(pattern_pose);
-        tf::poseEigenToMsg(pattern_pose, res.pose);
-      }
-      if (was_running)
-        ensenso_ptr_->start();
-      return true;
-    }
-    
-    bool computeCalibrationCB(ensenso::ComputeCalibration::Request& req, ensenso::ComputeCalibration::Response &res)
-    {
-      // Very important to stop the camera before performing the calibration
-      bool was_running = ensenso_ptr_->isRunning();
-      if (was_running)
-        ensenso_ptr_->stop();
-      std::vector<Eigen::Affine3d, Eigen::aligned_allocator<Eigen::Affine3d> > poses;
-      for (size_t i = 0; i < req.robotposes.poses.size(); i++) {
-        Eigen::Affine3d pose;
-        tf::poseMsgToEigen(req.robotposes.poses[i], pose);
-        poses.push_back(pose);
-      }
-      Eigen::Affine3d seed;
-      tf::poseMsgToEigen(req.seed, seed);
-      std::string result;
-      double error;
-      int iters;
-      if (!ensenso_ptr_->computeCalibrationMatrix(poses, result, iters, error, "Moving", "Hand", seed))
-        res.success = false;
-      else {
-        ROS_INFO("Calibration computation finished");
-        // Populate the response
-        res.success = true;
-        Eigen::Affine3d eigen_result;
-        ensenso_ptr_->jsonTransformationToMatrix(result, eigen_result);
-        eigen_result.translation () /= 1000.0;  // Convert translation to meters (Ensenso API returns milimeters)
-        tf::poseEigenToMsg(eigen_result, res.result);
-        res.reprojection_error = error;
-        res.iterations = iters;
-        if (req.store_to_eeprom)
-        {
-          if (!ensenso_ptr_->clearEEPROMExtrinsicCalibration())
-            ROS_WARN("Could not reset extrinsic calibration");
-          ensenso_ptr_->storeEEPROMExtrinsicCalibration();
-          ROS_INFO("Calibration stored into the EEPROM");
-        }
-      }
-      if (was_running)
-        ensenso_ptr_->start();
-      return true;
     }
     
     bool configureStreamingCB(ensenso::ConfigureStreaming::Request& req, ensenso::ConfigureStreaming::Response &res)
@@ -239,51 +146,6 @@ class EnsensoNode
       }
       if (was_running)
         ensenso_ptr_->start();
-      res.success = true;
-      return true;
-    }
-    
-    bool gridSpacingCB (ensenso::GridSpacing::Request& req, ensenso::GridSpacing::Response &res)
-    {
-      bool was_running = ensenso_ptr_->isRunning();
-      if (was_running)
-        ensenso_ptr_->stop();
-      res.grid_spacing = ensenso_ptr_->getPatternGridSpacing();
-      res.success = (res.grid_spacing > 0);
-      if (was_running)
-        ensenso_ptr_->start();
-      return true;
-    }
-    
-    bool initCalibrationCB(ensenso::InitCalibration::Request& req, ensenso::InitCalibration::Response &res)
-    {
-      bool was_running = ensenso_ptr_->isRunning();
-      if (was_running)
-        ensenso_ptr_->stop();
-      // The grid_spacing value in the request has preference over the decode one
-      double spacing;
-      if (req.grid_spacing > 0)
-        spacing = req.grid_spacing;
-      else
-        spacing = ensenso_ptr_->getPatternGridSpacing();
-        
-      if (spacing > 0)
-      {
-        ensenso_ptr_->initExtrinsicCalibration(spacing);
-        res.success = true;
-        res.used_grid_spacing = spacing;
-      }
-      if (was_running)
-        ensenso_ptr_->start();
-      return true;
-    }
-    
-    bool startStreamingCB(ensenso::SetBool::Request& req, ensenso::SetBool::Response &res)
-    {
-      if (req.data)
-        ensenso_ptr_->start();
-      else
-        ensenso_ptr_->stop();
       res.success = true;
       return true;
     }
@@ -357,7 +219,7 @@ class EnsensoNode
 
 int main(int argc, char **argv)
 {
-  ros::init (argc, argv, "ensenso");
+  ros::init (argc, argv, "ensenso_node");
   EnsensoNode ensenso_node;
   ros::spin();
   ros::shutdown();

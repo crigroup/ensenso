@@ -1,10 +1,10 @@
 <?xml version="1.0"?>
 <launch>
   
-  <arg name="serial" default="150533" />
+  <arg name="serial" default="150534" />
   
   <!-- Ensenso node -->
-  <node name="ensenso_node" pkg="ensenso" type="ensenso_node" ns="ensenso" output="screen"> 
+  <node name="ensenso_node" pkg="ensenso" type="ensenso_node" ns="camera" output="screen"> 
     <param name="serial"          type="string" value="$(arg serial)" />
     <param name="camera_frame_id" type="string" value="ensenso_optical_frame" />
     <param name="point_cloud"     type="bool"   value="true" />

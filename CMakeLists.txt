@@ -17,8 +17,10 @@ find_package(catkin REQUIRED COMPONENTS
 )
 
 find_package(Boost REQUIRED COMPONENTS system filesystem thread)
-find_package(Eigen REQUIRED)
-find_package(PCL 1.8.0 REQUIRED)
+find_package(Eigen3 REQUIRED)
+find_package(PCL REQUIRED)
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "/opt/ensenso/cmake")
+find_package(Ensenso REQUIRED)
 
 add_service_files(
   FILES
@@ -57,14 +59,15 @@ catkin_package(
 
 # Order of the include dirs matters!
 include_directories(include)
-include_directories(${PCL_INCLUDE_DIRS}) 
-include_directories(${catkin_INCLUDE_DIRS}) 
+include_directories(${PCL_INCLUDE_DIRS})
+include_directories(${ENSENSO_INCLUDE_DIRS})
+include_directories(${catkin_INCLUDE_DIRS})
 add_definitions(${PCL_DEFINITIONS})
 
 
 # Libraries
 add_library(ensenso_grabber src/ensenso_grabber.cpp)
-target_link_libraries(ensenso_grabber ${PCL_LIBRARIES} ${catkin_LIBRARIES})
+target_link_libraries(ensenso_grabber ${ENSENSO_LIBRARIES} ${PCL_LIBRARIES} ${catkin_LIBRARIES})
 
 add_executable(ensenso_node src/ensenso_node.cpp)
 add_dependencies(ensenso_node ${catkin_EXPORTED_TARGETS})
