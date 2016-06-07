@@ -63,6 +63,42 @@ pcl::EnsensoGrabber::~EnsensoGrabber () throw ()
   }
 }
 
+bool pcl::EnsensoGrabber::closeDevice ()
+{
+  if (!device_open_)
+    return (false);
+
+  stop ();
+  PCL_INFO ("Closing Ensenso stereo camera\n");
+
+  try
+  {
+    NxLibCommand (cmdClose).execute ();
+    device_open_ = false;
+  }
+  catch (NxLibException &ex)
+  {
+    ensensoExceptionHandling (ex, "closeDevice");
+    return (false);
+  }
+  return (true);
+}
+
+bool pcl::EnsensoGrabber::closeTcpPort ()
+{
+  try
+  {
+    nxLibCloseTcpPort ();
+    tcp_open_ = false;
+  }
+  catch (NxLibException &ex)
+  {
+    ensensoExceptionHandling (ex, "closeTcpPort");
+    return (false);
+  }
+  return (true);
+}
+
 int pcl::EnsensoGrabber::enumDevices () const
 {
   int camera_count = 0;
@@ -86,209 +122,6 @@ int pcl::EnsensoGrabber::enumDevices () const
     ensensoExceptionHandling (ex, "enumDevices");
   }
   return (camera_count);
-}
-
-bool pcl::EnsensoGrabber::openDevice (std::string serial_no)
-{
-  if (device_open_)
-    PCL_THROW_EXCEPTION (pcl::IOException, "Cannot open multiple devices!");
-  PCL_INFO ("Opening Ensenso stereo camera S/N: %s\n", serial_no.c_str());
-  try
-  {
-    // Create a pointer referencing the camera's tree item, for easier access:
-    camera_ = (*root_)[itmCameras][itmBySerialNo][serial_no];
-    if (!camera_.exists () || camera_[itmType] != valStereo)
-      PCL_THROW_EXCEPTION (pcl::IOException, "Please connect a single stereo camera to your computer!");
-    NxLibCommand open (cmdOpen);
-    open.parameters ()[itmCameras] = camera_[itmSerialNumber].asString ();
-    open.execute ();
-  }
-  catch (NxLibException &ex)
-  {
-    ensensoExceptionHandling (ex, "openDevice");
-    return (false);
-  }
-  device_open_ = true;
-  return (true);
-}
-
-bool pcl::EnsensoGrabber::closeDevice ()
-{
-  if (!device_open_)
-    return (false);
-
-  stop ();
-  PCL_INFO ("Closing Ensenso stereo camera\n");
-
-  try
-  {
-    NxLibCommand (cmdClose).execute ();
-    device_open_ = false;
-  }
-  catch (NxLibException &ex)
-  {
-    ensensoExceptionHandling (ex, "closeDevice");
-    return (false);
-  }
-  return (true);
-}
-
-void pcl::EnsensoGrabber::start ()
-{
-  if (isRunning ())
-    return;
-  if (!device_open_)
-    openDevice (0);
-  running_ = true;
-  grabber_thread_ = boost::thread (&pcl::EnsensoGrabber::processGrabbing, this);
-}
-
-void pcl::EnsensoGrabber::stop ()
-{
-  if (running_)
-  {
-    running_ = false;  // Stop processGrabbing () callback
-    grabber_thread_.join ();
-  }
-}
-
-bool pcl::EnsensoGrabber::isRunning () const
-{
-  return (running_);
-}
-
-bool pcl::EnsensoGrabber::isTcpPortOpen () const
-{
-  return (tcp_open_);
-}
-
-std::string pcl::EnsensoGrabber::getName () const
-{
-  return ("EnsensoGrabber");
-}
-
-bool pcl::EnsensoGrabber::configureCapture (const bool auto_exposure,
-                      const bool auto_gain,
-                      const int bining,
-                      const float exposure,
-                      const bool front_light,
-                      const int gain,
-                      const bool gain_boost,
-                      const bool hardware_gamma,
-                      const bool hdr,
-                      const int pixel_clock,
-                      const bool projector,
-                      const int target_brightness,
-                      const std::string trigger_mode,
-                      const bool use_disparity_map_area_of_interest) const
-{
-  if (!device_open_)
-    return (false);
-
-  try
-  {
-    NxLibItem captureParams = camera_[itmParameters][itmCapture];
-    captureParams[itmAutoExposure].set (auto_exposure);
-    captureParams[itmAutoGain].set (auto_gain);
-    captureParams[itmBinning].set (bining);
-    captureParams[itmExposure].set (exposure);
-    captureParams[itmFrontLight].set (front_light);
-    captureParams[itmGain].set (gain);
-    captureParams[itmGainBoost].set (gain_boost);
-    captureParams[itmHardwareGamma].set (hardware_gamma);
-    captureParams[itmHdr].set (hdr);
-    captureParams[itmPixelClock].set (pixel_clock);
-    captureParams[itmProjector].set (projector);
-    captureParams[itmTargetBrightness].set (target_brightness);
-    captureParams[itmTriggerMode].set (trigger_mode);
-    captureParams[itmUseDisparityMapAreaOfInterest].set (use_disparity_map_area_of_interest);
-  }
-  catch (NxLibException &ex)
-  {
-    ensensoExceptionHandling (ex, "configureCapture");
-    return (false);
-  }
-  return (true);
-}
-
-bool pcl::EnsensoGrabber::grabSingleCloud (pcl::PointCloud<pcl::PointXYZ> &cloud)
-{
-  if (!device_open_)
-    return (false);
-
-  if (running_)
-    return (false);
-
-  try
-  {
-    NxLibCommand (cmdCapture).execute ();
-    // Stereo matching task
-    NxLibCommand (cmdComputeDisparityMap).execute ();
-    // Convert disparity map into XYZ data for each pixel
-    NxLibCommand (cmdComputePointMap).execute ();
-    // Get info about the computed point map and copy it into a std::vector
-    double timestamp;
-    std::vector<float> pointMap;
-    int width, height;
-    camera_[itmImages][itmRaw][itmLeft].getBinaryDataInfo (0, 0, 0, 0, 0, &timestamp);  // Get raw image timestamp
-    camera_[itmImages][itmPointMap].getBinaryDataInfo (&width, &height, 0, 0, 0, 0);
-    camera_[itmImages][itmPointMap].getBinaryData (pointMap, 0);
-    // Copy point cloud and convert in meters
-    cloud.header.stamp = getPCLStamp (timestamp);
-    cloud.resize (height * width);
-    cloud.width = width;
-    cloud.height = height;
-    cloud.is_dense = false;
-    // Copy data in point cloud (and convert milimeters in meters)
-    for (size_t i = 0; i < pointMap.size (); i += 3)
-    {
-      cloud.points[i / 3].x = pointMap[i] / 1000.0;
-      cloud.points[i / 3].y = pointMap[i + 1] / 1000.0;
-      cloud.points[i / 3].z = pointMap[i + 2] / 1000.0;
-    }
-    return (true);
-  }
-  catch (NxLibException &ex)
-  {
-    ensensoExceptionHandling (ex, "grabSingleCloud");
-    return (false);
-  }
-}
-
-float pcl::EnsensoGrabber::getFramesPerSecond () const
-{
-  boost::mutex::scoped_lock lock (fps_mutex_);
-  return (0.0);
-}
-
-bool pcl::EnsensoGrabber::openTcpPort (const int port)
-{
-  try
-  {
-    nxLibOpenTcpPort (port);
-    tcp_open_ = true;
-  }
-  catch (NxLibException &ex)
-  {
-    ensensoExceptionHandling (ex, "openTcpPort");
-    return (false);
-  }
-  return (true);
-}
-
-bool pcl::EnsensoGrabber::closeTcpPort ()
-{
-  try
-  {
-    nxLibCloseTcpPort ();
-    tcp_open_ = false;
-  }
-  catch (NxLibException &ex)
-  {
-    ensensoExceptionHandling (ex, "closeTcpPort");
-    return (false);
-  }
-  return (true);
 }
 
 bool pcl::EnsensoGrabber::getCameraInfo(std::string cam, sensor_msgs::CameraInfo &cam_info) const
@@ -335,13 +168,15 @@ bool pcl::EnsensoGrabber::getCameraInfo(std::string cam, sensor_msgs::CameraInfo
   }
 }
 
-pcl::uint64_t pcl::EnsensoGrabber::getPCLStamp (const double ensenso_stamp)
+float pcl::EnsensoGrabber::getFramesPerSecond () const
 {
-#if defined _WIN32 || defined _WIN64
-  return (ensenso_stamp * 1000000.0);
-#else
-  return ( (ensenso_stamp - 11644473600.0) * 1000000.0);
-#endif
+  boost::mutex::scoped_lock lock (fps_mutex_);
+  return (fps_);
+}
+
+std::string pcl::EnsensoGrabber::getName () const
+{
+  return ("EnsensoGrabber");
 }
 
 std::string pcl::EnsensoGrabber::getOpenCVType (const int channels,
@@ -351,6 +186,108 @@ std::string pcl::EnsensoGrabber::getOpenCVType (const int channels,
   int bits = bpe * 8;
   char type = isFlt ? 'F' : (bpe > 3 ? 'S' : 'U');
   return (boost::str (boost::format ("CV_%i%cC%i") % bits % type % channels));
+}
+
+pcl::uint64_t pcl::EnsensoGrabber::getPCLStamp (const double ensenso_stamp)
+{
+#if defined _WIN32 || defined _WIN64
+  return (ensenso_stamp * 1000000.0);
+#else
+  return ( (ensenso_stamp - 11644473600.0) * 1000000.0);
+#endif
+}
+
+bool pcl::EnsensoGrabber::grabSingleCloud (pcl::PointCloud<pcl::PointXYZ> &cloud)
+{
+  if (!device_open_)
+    return (false);
+
+  if (running_)
+    return (false);
+
+  try
+  {
+    NxLibCommand (cmdCapture).execute ();
+    // Stereo matching task
+    NxLibCommand (cmdComputeDisparityMap).execute ();
+    // Convert disparity map into XYZ data for each pixel
+    NxLibCommand (cmdComputePointMap).execute ();
+    // Get info about the computed point map and copy it into a std::vector
+    double timestamp;
+    std::vector<float> pointMap;
+    int width, height;
+    camera_[itmImages][itmRaw][itmLeft].getBinaryDataInfo (0, 0, 0, 0, 0, &timestamp);  // Get raw image timestamp
+    camera_[itmImages][itmPointMap].getBinaryDataInfo (&width, &height, 0, 0, 0, 0);
+    camera_[itmImages][itmPointMap].getBinaryData (pointMap, 0);
+    // Copy point cloud and convert in meters
+    cloud.header.stamp = getPCLStamp (timestamp);
+    cloud.resize (height * width);
+    cloud.width = width;
+    cloud.height = height;
+    cloud.is_dense = false;
+    // Copy data in point cloud (and convert milimeters in meters)
+    for (size_t i = 0; i < pointMap.size (); i += 3)
+    {
+      cloud.points[i / 3].x = pointMap[i] / 1000.0;
+      cloud.points[i / 3].y = pointMap[i + 1] / 1000.0;
+      cloud.points[i / 3].z = pointMap[i + 2] / 1000.0;
+    }
+    return (true);
+  }
+  catch (NxLibException &ex)
+  {
+    ensensoExceptionHandling (ex, "grabSingleCloud");
+    return (false);
+  }
+}
+
+bool pcl::EnsensoGrabber::isRunning () const
+{
+  return (running_);
+}
+
+bool pcl::EnsensoGrabber::isTcpPortOpen () const
+{
+  return (tcp_open_);
+}
+
+bool pcl::EnsensoGrabber::openDevice (std::string serial)
+{
+  if (device_open_)
+    PCL_THROW_EXCEPTION (pcl::IOException, "Cannot open multiple devices!");
+  PCL_INFO ("Opening Ensenso stereo camera S/N: %s\n", serial.c_str());
+  try
+  {
+    // Create a pointer referencing the camera's tree item, for easier access:
+    camera_ = (*root_)[itmCameras][itmBySerialNo][serial];
+    if (!camera_.exists () || camera_[itmType] != valStereo)
+      PCL_THROW_EXCEPTION (pcl::IOException, "Please connect a single stereo camera to your computer!");
+    NxLibCommand open (cmdOpen);
+    open.parameters ()[itmCameras] = camera_[itmSerialNumber].asString ();
+    open.execute ();
+  }
+  catch (NxLibException &ex)
+  {
+    ensensoExceptionHandling (ex, "openDevice");
+    return (false);
+  }
+  device_open_ = true;
+  return (true);
+}
+
+bool pcl::EnsensoGrabber::openTcpPort (const int port)
+{
+  try
+  {
+    nxLibOpenTcpPort (port);
+    tcp_open_ = true;
+  }
+  catch (NxLibException &ex)
+  {
+    ensensoExceptionHandling (ex, "openTcpPort");
+    return (false);
+  }
+  return (true);
 }
 
 void pcl::EnsensoGrabber::processGrabbing ()
@@ -366,9 +303,13 @@ void pcl::EnsensoGrabber::processGrabbing ()
         pcl::PointCloud<pcl::PointXYZ>::Ptr cloud (new pcl::PointCloud<pcl::PointXYZ>);
         boost::shared_ptr<PairOfImages> rawimages (new PairOfImages);
         boost::shared_ptr<PairOfImages> rectifiedimages (new PairOfImages);
+        // Update FPS
+        static double last = pcl::getTime ();
+        double now = pcl::getTime ();
         fps_mutex_.lock ();
-        //~ frequency_.event ();
+        fps_ = 1.0 / float(now - last);
         fps_mutex_.unlock ();
+        last = now;
         
         NxLibCommand (cmdCapture).execute ();
         double timestamp;
@@ -391,7 +332,7 @@ void pcl::EnsensoGrabber::processGrabbing ()
           }
           catch (const NxLibException &ex)
           {
-            // We failed to collect the pattern but the RAW images are available!
+            // if failed to collect the pattern will read the RAW images anyway.
           }
 
           if (collected_pattern)
@@ -478,5 +419,116 @@ void pcl::EnsensoGrabber::processGrabbing ()
     {
       ensensoExceptionHandling (ex, "processGrabbing");
     }
+  }
+}
+
+bool pcl::EnsensoGrabber::restoreDefaultConfiguration () const
+{
+  return true;
+}
+
+
+bool pcl::EnsensoGrabber::setAutoBlackLevel (const bool enable) const
+{
+  return true;
+}
+
+bool pcl::EnsensoGrabber::setAutoExposure (const bool enable) const
+{
+  return true;
+}
+
+bool pcl::EnsensoGrabber::setAutoGain (const bool enable) const
+{
+  return true;
+}
+
+bool pcl::EnsensoGrabber::setBinning (const int binning) const
+{
+  return true;
+}
+
+bool pcl::EnsensoGrabber::setBlackLevelOffset (const float offset) const
+{
+  return true;
+}
+
+bool pcl::EnsensoGrabber::setExposure (const float exposure) const
+{
+  return true;
+}
+
+bool pcl::EnsensoGrabber::setFlexView (const bool enable, const int imagepairs) const
+{
+  return true;
+}
+
+bool pcl::EnsensoGrabber::setFrontLight (const bool enable) const
+{
+  return true;
+}
+
+bool pcl::EnsensoGrabber::setGain (const float gain) const
+{
+  return true;
+}
+
+bool pcl::EnsensoGrabber::setGainBoost (const bool enable) const
+{
+  return true;
+}
+
+bool pcl::EnsensoGrabber::setHardwareGamma (const bool enable) const
+{
+  return true;
+}
+
+bool pcl::EnsensoGrabber::setHdr (const bool enable) const
+{
+  return true;
+}
+
+bool pcl::EnsensoGrabber::setPixelClock (const int pixel_clock) const
+{
+  return true;
+}
+
+bool pcl::EnsensoGrabber::setProjector (const bool enable) const
+{
+  return true;
+}
+
+bool pcl::EnsensoGrabber::setTargetBrightness (const int target) const
+{
+  return true;
+}
+
+bool pcl::EnsensoGrabber::setTriggerMode (const std::string mode) const
+{
+  return true;
+}
+
+bool pcl::EnsensoGrabber::setUseDisparityMapAreaOfInterest (const bool enable) const
+{
+  return true;
+}
+
+void pcl::EnsensoGrabber::start ()
+{
+  if (isRunning ())
+    return;
+  if (!device_open_)
+    openDevice (0);
+  fps_ = 0.0;
+  running_ = true;
+  grabber_thread_ = boost::thread (&pcl::EnsensoGrabber::processGrabbing, this);
+}
+
+void pcl::EnsensoGrabber::stop ()
+{
+  if (running_)
+  {
+    running_ = false;  // Stop processGrabbing () callback
+    grabber_thread_.join ();
   }
 }

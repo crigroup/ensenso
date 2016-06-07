@@ -99,7 +99,7 @@ class EnsensoNode
       ensenso_ptr_.reset(new pcl::EnsensoGrabber);
       ensenso_ptr_->openDevice(serial);
       ensenso_ptr_->openTcpPort();
-      ensenso_ptr_->configureCapture();
+      ensenso_ptr_->restoreDefaultConfiguration();
       // Start ensenso grabber
       ensenso::ConfigureStreaming::Request req;
       ensenso::ConfigureStreaming::Response res;
