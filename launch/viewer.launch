@@ -7,7 +7,8 @@
   <node name="ensenso_node" pkg="ensenso" type="ensenso_node" ns="camera" output="screen"> 
     <param name="serial"          type="string" value="$(arg serial)" />
     <param name="camera_frame_id" type="string" value="ensenso_optical_frame" />
-    <param name="point_cloud"     type="bool"   value="true" />
+    <param name="stream_cloud"    type="bool"   value="true" />
+    <param name="stream_images"   type="bool"   value="true" />
     <param name="front_light"     type="bool"   value="false" />
     <param name="projector"       type="bool"   value="true" />
   </node>

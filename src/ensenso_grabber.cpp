@@ -1,10 +1,3 @@
-#include <pcl/pcl_config.h>
-#include <pcl/exceptions.h>
-#include <pcl/common/io.h>
-#include <pcl/console/print.h>
-#include <pcl/point_types.h>
-#include <boost/format.hpp>
-#include <boost/algorithm/string/predicate.hpp>
 #include "ensenso/ensenso_grabber.h"
 
 
@@ -424,93 +417,301 @@ void pcl::EnsensoGrabber::processGrabbing ()
 
 bool pcl::EnsensoGrabber::restoreDefaultConfiguration () const
 {
-  return true;
+  bool result = true;
+  result &= setAutoBlackLevel();
+  result &= setAutoExposure();
+  result &= setAutoGain();
+  result &= setBinning();
+  result &= setBlackLevelOffset();
+  result &= setExposure();
+  result &= setFlexView();
+  result &= setFrontLight();
+  result &= setGain();
+  result &= setGainBoost();
+  result &= setHardwareGamma();
+  result &= setHdr();
+  result &= setPixelClock();
+  result &= setProjector();
+  result &= setTargetBrightness();
+  result &= setTriggerMode();
+  result &= setUseDisparityMapAreaOfInterest();
+  return result;
 }
 
 
 bool pcl::EnsensoGrabber::setAutoBlackLevel (const bool enable) const
 {
-  return true;
+  if (!device_open_)
+    return (false);
+  try
+  {
+    camera_[itmParameters][itmCapture][itmAutoBlackLevel].set (enable);
+  }
+  catch (NxLibException &ex)
+  {
+    ensensoExceptionHandling (ex, "setAutoBlackLevel");
+    return (false);
+  }
+  return (true);
 }
 
 bool pcl::EnsensoGrabber::setAutoExposure (const bool enable) const
 {
-  return true;
+  if (!device_open_)
+    return (false);
+  try
+  {
+    camera_[itmParameters][itmCapture][itmAutoExposure].set (enable);
+  }
+  catch (NxLibException &ex)
+  {
+    ensensoExceptionHandling (ex, "setAutoExposure");
+    return (false);
+  }
+  return (true);
 }
 
 bool pcl::EnsensoGrabber::setAutoGain (const bool enable) const
 {
-  return true;
+  if (!device_open_)
+    return (false);
+  try
+  {
+    camera_[itmParameters][itmCapture][itmAutoGain].set (enable);
+  }
+  catch (NxLibException &ex)
+  {
+    ensensoExceptionHandling (ex, "setAutoGain");
+    return (false);
+  }
+  return (true);
 }
 
 bool pcl::EnsensoGrabber::setBinning (const int binning) const
 {
-  return true;
+  if (!device_open_)
+    return (false);
+  try
+  {
+    camera_[itmParameters][itmCapture][itmBinning].set (binning);
+  }
+  catch (NxLibException &ex)
+  {
+    ensensoExceptionHandling (ex, "setBinning");
+    return (false);
+  }
+  return (true);
 }
 
 bool pcl::EnsensoGrabber::setBlackLevelOffset (const float offset) const
 {
-  return true;
+  if (!device_open_)
+    return (false);
+  try
+  {
+    camera_[itmParameters][itmCapture][itmBlackLevelOffset].set (offset);
+  }
+  catch (NxLibException &ex)
+  {
+    ensensoExceptionHandling (ex, "setBlackLevelOffset");
+    return (false);
+  }
+  return (true);
 }
 
 bool pcl::EnsensoGrabber::setExposure (const float exposure) const
 {
-  return true;
+if (!device_open_)
+    return (false);
+  try
+  {
+    camera_[itmParameters][itmCapture][itmExposure].set (exposure);
+  }
+  catch (NxLibException &ex)
+  {
+    ensensoExceptionHandling (ex, "setExposure");
+    return (false);
+  }
+  return (true);
 }
 
 bool pcl::EnsensoGrabber::setFlexView (const bool enable, const int imagepairs) const
 {
-  return true;
+if (!device_open_)
+    return (false);
+  try
+  {
+    if (enable && 2 <= imagepairs && imagepairs <= 8)
+      camera_[itmParameters][itmCapture][itmFlexView].set (imagepairs);
+    else
+      camera_[itmParameters][itmCapture][itmFlexView].set (false);
+  }
+  catch (NxLibException &ex)
+  {
+    ensensoExceptionHandling (ex, "setFlexView");
+    return (false);
+  }
+  return (true);
 }
 
 bool pcl::EnsensoGrabber::setFrontLight (const bool enable) const
 {
-  return true;
+if (!device_open_)
+    return (false);
+  try
+  {
+    camera_[itmParameters][itmCapture][itmFrontLight].set (enable);
+  }
+  catch (NxLibException &ex)
+  {
+    ensensoExceptionHandling (ex, "setFrontLight");
+    return (false);
+  }
+  return (true);
 }
 
 bool pcl::EnsensoGrabber::setGain (const float gain) const
 {
-  return true;
+if (!device_open_)
+    return (false);
+  try
+  {
+    camera_[itmParameters][itmCapture][itmGain].set (gain);
+  }
+  catch (NxLibException &ex)
+  {
+    ensensoExceptionHandling (ex, "setGain");
+    return (false);
+  }
+  return (true);
 }
 
 bool pcl::EnsensoGrabber::setGainBoost (const bool enable) const
 {
-  return true;
+if (!device_open_)
+    return (false);
+  try
+  {
+    camera_[itmParameters][itmCapture][itmGainBoost].set (enable);
+  }
+  catch (NxLibException &ex)
+  {
+    ensensoExceptionHandling (ex, "setGainBoost");
+    return (false);
+  }
+  return (true);
 }
 
 bool pcl::EnsensoGrabber::setHardwareGamma (const bool enable) const
 {
-  return true;
+if (!device_open_)
+    return (false);
+  try
+  {
+    camera_[itmParameters][itmCapture][itmHardwareGamma].set (enable);
+  }
+  catch (NxLibException &ex)
+  {
+    ensensoExceptionHandling (ex, "setHardwareGamma");
+    return (false);
+  }
+  return (true);
 }
 
 bool pcl::EnsensoGrabber::setHdr (const bool enable) const
 {
-  return true;
+if (!device_open_)
+    return (false);
+  try
+  {
+    camera_[itmParameters][itmCapture][itmHdr].set (enable);
+  }
+  catch (NxLibException &ex)
+  {
+    ensensoExceptionHandling (ex, "setHdr");
+    return (false);
+  }
+  return (true);
 }
 
 bool pcl::EnsensoGrabber::setPixelClock (const int pixel_clock) const
 {
-  return true;
+if (!device_open_)
+    return (false);
+  try
+  {
+    camera_[itmParameters][itmCapture][itmPixelClock].set (pixel_clock);
+  }
+  catch (NxLibException &ex)
+  {
+    ensensoExceptionHandling (ex, "setPixelClock");
+    return (false);
+  }
+  return (true);
 }
 
 bool pcl::EnsensoGrabber::setProjector (const bool enable) const
 {
-  return true;
+if (!device_open_)
+    return (false);
+  try
+  {
+    camera_[itmParameters][itmCapture][itmProjector].set (enable);
+  }
+  catch (NxLibException &ex)
+  {
+    ensensoExceptionHandling (ex, "setProjector");
+    return (false);
+  }
+  return (true);
 }
 
 bool pcl::EnsensoGrabber::setTargetBrightness (const int target) const
 {
-  return true;
+if (!device_open_)
+    return (false);
+  try
+  {
+    camera_[itmParameters][itmCapture][itmTargetBrightness].set (target);
+  }
+  catch (NxLibException &ex)
+  {
+    ensensoExceptionHandling (ex, "setTargetBrightness");
+    return (false);
+  }
+  return (true);
 }
 
 bool pcl::EnsensoGrabber::setTriggerMode (const std::string mode) const
 {
-  return true;
+if (!device_open_)
+    return (false);
+  try
+  {
+    camera_[itmParameters][itmCapture][itmTriggerMode].set (mode);
+  }
+  catch (NxLibException &ex)
+  {
+    ensensoExceptionHandling (ex, "setTriggerMode");
+    return (false);
+  }
+  return (true);
 }
 
 bool pcl::EnsensoGrabber::setUseDisparityMapAreaOfInterest (const bool enable) const
 {
-  return true;
+if (!device_open_)
+    return (false);
+  try
+  {
+    camera_[itmParameters][itmCapture][itmUseDisparityMapAreaOfInterest].set (enable);
+  }
+  catch (NxLibException &ex)
+  {
+    ensensoExceptionHandling (ex, "setUseDisparityMapAreaOfInterest");
+    return (false);
+  }
+  return (true);
 }
 
 void pcl::EnsensoGrabber::start ()

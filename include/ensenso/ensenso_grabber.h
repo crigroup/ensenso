@@ -1,21 +1,19 @@
 #ifndef __PCL_IO_ENSENSO_GRABBER__
 #define __PCL_IO_ENSENSO_GRABBER__
 
+// PCL
 #include <pcl/pcl_config.h>
 #include <pcl/common/io.h>
 #include <pcl/common/time.h>
 #include <pcl/io/eigen.h>
-#include <Eigen/Geometry>
-#include <Eigen/StdVector>
 #include <pcl/io/boost.h>
-#include <boost/thread.hpp>
-
 #include <pcl/io/grabber.h>
 #include <pcl/common/synchronizer.h>
-
+// Others
+#include <boost/thread.hpp>
 #include <camera_info_manager/camera_info_manager.h>
-
-#include <nxLib.h> // Ensenso SDK
+// Ensenso SDK
+#include <nxLib.h>
 
 namespace pcl
 {
@@ -106,7 +104,7 @@ public:
      * @return True if successful, false otherwise */
     bool openTcpPort (const int port = 24000);
     
-    /** @brief Uses the default capture configuration.
+    /** @brief Restores the default capture configuration parameters.
      * @return True if successful, false otherwise */
     bool restoreDefaultConfiguration () const;
     
@@ -163,7 +161,7 @@ public:
      * Please also note the illumination limitations.
      * @param[in] enable When set to true the camera's front LED will be switched on for the duration of the image exposure.
      * @return True if successful, false otherwise */
-    bool setFrontLight (const bool enable=true) const;
+    bool setFrontLight (const bool enable=false) const;
     
     /** @brief The current analog gain factor. See also MaxGain.
      * @param[in] gain A value in the range 1..MaxGain specifying the camera's analog gain factor. E.g. setting a value of 2.0 

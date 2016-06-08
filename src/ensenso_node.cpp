@@ -1,38 +1,18 @@
 // ROS headers
 #include <ros/ros.h>
-#include <ros/service.h>
-#include <std_msgs/String.h>
 #include <sensor_msgs/Image.h>
 #include <cv_bridge/cv_bridge.h>
 #include <pcl_ros/point_cloud.h>
 #include <sensor_msgs/PointCloud2.h>
-#include <tf_conversions/tf_eigen.h>
-#include <tf/transform_listener.h>
-
-// Conversions
-#include <eigen_conversions/eigen_msg.h>
-
+// Ensenso grabber
+#include <ensenso/ensenso_grabber.h>
 // Image transport
 #include <image_transport/image_transport.h>
 #include <sensor_msgs/CameraInfo.h>
 #include <sensor_msgs/image_encodings.h>
-#include <opencv2/imgproc/imgproc.hpp>
-#include <opencv2/highgui/highgui.hpp>
-
-// PCL headers
-#include <pcl/common/transforms.h>
-
-// Ensenso grabber
-#include <ensenso/ensenso_grabber.h>
-// Services
-#include <ensenso/Lights.h>
-#include <ensenso/CapturePattern.h>
-#include <ensenso/ComputeCalibration.h>
-#include <ensenso/ConfigureStreaming.h>
-#include <ensenso/GridSpacing.h>
-#include <ensenso/InitCalibration.h>
-#include <ensenso/SetBool.h>
-#include <std_srvs/Trigger.h>
+// Dynamic reconfigure
+#include <dynamic_reconfigure/server.h>
+#include <ensenso/CaptureParametersConfig.h>
 
 
 // Typedefs
@@ -46,25 +26,17 @@ class EnsensoNode
   private:
     // ROS
     ros::NodeHandle                   nh_, nh_private_;
-    ros::ServiceServer                calibrate_srv_;
-    ros::ServiceServer                capture_srv_;
-    ros::ServiceServer                grid_spacing_srv_;
-    ros::ServiceServer                init_cal_srv_;
-    ros::ServiceServer                ligths_srv_;
-    ros::ServiceServer                start_srv_;
-    ros::ServiceServer                configure_srv_;
+    dynamic_reconfigure::Server<ensenso::CaptureParametersConfig> reconfigure_server_;
     // Images
     image_transport::CameraPublisher  l_raw_pub_;
     image_transport::CameraPublisher  r_raw_pub_;
     image_transport::Publisher        l_rectified_pub_;
     image_transport::Publisher        r_rectified_pub_;
     // Point cloud
-    bool                              point_cloud_;
     ros::Publisher                    cloud_pub_;
     // Camera info
     ros::Publisher                    linfo_pub_;
     ros::Publisher                    rinfo_pub_;
-
     // TF
     std::string                       camera_frame_id_;
     // Ensenso grabber
@@ -83,9 +55,13 @@ class EnsensoNode
       nh_private_.param("camera_frame_id", camera_frame_id_, std::string("ensenso_optical_frame"));
       if (!nh_private_.hasParam("camera_frame_id"))
         ROS_WARN_STREAM("Parameter [~camera_frame_id] not found, using default: " << camera_frame_id_);
-      nh_private_.param("point_cloud", point_cloud_, false);
-      if (!nh_private_.hasParam("point_cloud"))
-        ROS_WARN_STREAM("Parameter [~point_cloud] not found, using default: " << point_cloud_);
+      bool stream_cloud, stream_images;
+      nh_private_.param("stream_cloud", stream_cloud, false);
+      if (!nh_private_.hasParam("stream_cloud"))
+        ROS_WARN_STREAM("Parameter [~stream_cloud] not found, using default: " << std::boolalpha << stream_cloud);
+      nh_private_.param("stream_images", stream_images, true);
+      if (!nh_private_.hasParam("stream_images"))
+        ROS_WARN_STREAM("Parameter [~stream_images] not found, using default: " << std::boolalpha << stream_images);
       // Advertise topics
       image_transport::ImageTransport it(nh_);
       l_raw_pub_ = it.advertiseCamera("left/image_raw", 2);
@@ -99,14 +75,13 @@ class EnsensoNode
       ensenso_ptr_.reset(new pcl::EnsensoGrabber);
       ensenso_ptr_->openDevice(serial);
       ensenso_ptr_->openTcpPort();
-      ensenso_ptr_->restoreDefaultConfiguration();
-      // Start ensenso grabber
-      ensenso::ConfigureStreaming::Request req;
-      ensenso::ConfigureStreaming::Response res;
-      req.cloud = point_cloud_;
-      req.images = true;
-      configureStreamingCB(req, res);
+      // Configure and start streaming
+      configureStreaming(stream_cloud, stream_images);
       ensenso_ptr_->start();
+      // Start dynamic reconfigure server
+      dynamic_reconfigure::Server<ensenso::CaptureParametersConfig>::CallbackType f;
+      f = boost::bind(&EnsensoNode::CaptureParametersCallback, this, _1, _2);
+      reconfigure_server_.setCallback(f);
     }
     
     ~EnsensoNode()
@@ -115,7 +90,68 @@ class EnsensoNode
       ensenso_ptr_->closeDevice();
     }
     
-    bool configureStreamingCB(ensenso::ConfigureStreaming::Request& req, ensenso::ConfigureStreaming::Response &res)
+    void CaptureParametersCallback(ensenso::CaptureParametersConfig &config, uint32_t level)
+    {
+      std::string trigger_mode;
+      switch (config.TriggerMode)
+      {
+        case 0:
+          trigger_mode = "Software";
+          break;
+        case 1:
+          trigger_mode = "FallingEdge";
+          break;
+        case 2:
+          trigger_mode = "RisingEdge";
+          break;
+        default:
+          trigger_mode = "Software";
+      }
+      ROS_DEBUG("---");
+      ROS_DEBUG("Reconfigure Request");
+      ROS_DEBUG_STREAM("AutoBlackLevel: "   << std::boolalpha << config.AutoBlackLevel);
+      ROS_DEBUG_STREAM("AutoExposure: "     << std::boolalpha << config.AutoExposure);
+      ROS_DEBUG_STREAM("AutoGain: "         << std::boolalpha << config.AutoGain);
+      ROS_DEBUG_STREAM("Binning: "          << config.Binning);
+      ROS_DEBUG_STREAM("BlackLevelOffset: " << config.BlackLevelOffset);
+      ROS_DEBUG_STREAM("Exposure: "         << config.Exposure);
+      ROS_DEBUG_STREAM("FlexView: "         << std::boolalpha << config.FlexView);
+      ROS_DEBUG_STREAM("FlexViewImages: "   << config.FlexViewImages);
+      ROS_DEBUG_STREAM("FrontLight: "       << std::boolalpha << config.FrontLight);
+      ROS_DEBUG_STREAM("Gain: "             << config.Gain);
+      ROS_DEBUG_STREAM("GainBoost: "        << std::boolalpha << config.GainBoost);
+      ROS_DEBUG_STREAM("HardwareGamma: "    << std::boolalpha << config.HardwareGamma);
+      ROS_DEBUG_STREAM("Hdr: "              << std::boolalpha << config.Hdr);
+      ROS_DEBUG_STREAM("PixelClock: "       << config.PixelClock);
+      ROS_DEBUG_STREAM("Projector: "        << std::boolalpha << config.Projector);
+      ROS_DEBUG_STREAM("TargetBrightness: " << config.TargetBrightness);
+      ROS_DEBUG_STREAM("TriggerMode: "      << trigger_mode);
+      ROS_DEBUG_STREAM("DisparityMapAOI: "  << std::boolalpha << config.DisparityMapAOI);
+      ROS_DEBUG("---");
+      ensenso_ptr_->setAutoBlackLevel(config.AutoBlackLevel);
+      ensenso_ptr_->setAutoExposure(config.AutoExposure);
+      ensenso_ptr_->setAutoGain(config.AutoGain);
+      ensenso_ptr_->setBlackLevelOffset(config.BlackLevelOffset);
+      ensenso_ptr_->setExposure(config.Exposure);
+      ensenso_ptr_->setFrontLight(config.FrontLight);
+      ensenso_ptr_->setGain(config.Gain);
+      ensenso_ptr_->setGainBoost(config.GainBoost);
+      ensenso_ptr_->setHardwareGamma(config.HardwareGamma);
+      ensenso_ptr_->setHdr(config.Hdr);
+      ensenso_ptr_->setPixelClock(config.PixelClock);
+      ensenso_ptr_->setProjector(config.Projector);
+      ensenso_ptr_->setTargetBrightness(config.TargetBrightness);
+      ensenso_ptr_->setTriggerMode(trigger_mode);
+      ensenso_ptr_->setUseDisparityMapAreaOfInterest(config.DisparityMapAOI);
+      // Flexview and binning only work in 'Software' trigger mode and with the projector on
+      if (trigger_mode.compare("Software") == 0 && config.Projector)
+      {
+        ensenso_ptr_->setBinning(config.Binning);
+        ensenso_ptr_->setFlexView(config.FlexView, config.FlexViewImages);
+      }
+    }
+    
+    bool configureStreaming(const bool cloud, const bool images=true)
     {
       bool was_running = ensenso_ptr_->isRunning();
       if (was_running)
@@ -123,7 +159,7 @@ class EnsensoNode
       // Disconnect previous connection
       connection_.disconnect();
       // Connect new signals
-      if (req.cloud && req.images)
+      if (cloud && images)
       {
         boost::function<void(
           const boost::shared_ptr<PointCloudXYZ>&, 
@@ -131,14 +167,14 @@ class EnsensoNode
           const boost::shared_ptr<PairOfImages>&)> f = boost::bind (&EnsensoNode::grabberCallback, this, _1, _2, _3);
         connection_ = ensenso_ptr_->registerCallback(f);
       }
-      else if (req.images)
+      else if (images)
       {
         boost::function<void(
           const boost::shared_ptr<PairOfImages>&,
           const boost::shared_ptr<PairOfImages>&)> f = boost::bind (&EnsensoNode::grabberCallback, this, _1, _2);
         connection_ = ensenso_ptr_->registerCallback(f);
       }
-      else if (req.cloud)
+      else if (cloud)
       {
         boost::function<void(
             const boost::shared_ptr<PointCloudXYZ>&)> f = boost::bind (&EnsensoNode::grabberCallback, this, _1);
@@ -146,7 +182,6 @@ class EnsensoNode
       }
       if (was_running)
         ensenso_ptr_->start();
-      res.success = true;
       return true;
     }
     

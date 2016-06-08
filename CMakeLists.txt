@@ -22,8 +22,7 @@ find_package(PCL REQUIRED)
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "/opt/ensenso/cmake")
 find_package(Ensenso REQUIRED)
 
-add_service_files(
-  FILES
+add_service_files(FILES
   CapturePattern.srv
   ComputeCalibration.srv
   ConfigureStreaming.srv
@@ -35,8 +34,12 @@ add_service_files(
 
 generate_messages(
   DEPENDENCIES
-  geometry_msgs
-  std_msgs
+    geometry_msgs
+    std_msgs
+)
+
+generate_dynamic_reconfigure_options(
+  cfg/CaptureParameters.cfg
 )
 
 catkin_package(
