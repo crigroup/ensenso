@@ -93,7 +93,8 @@ class EnsensoDriver
     
     void CameraParametersCallback(ensenso::CameraParametersConfig &config, uint32_t level)
     {
-      std::string trigger_mode;
+      // Process enumerators
+      std::string trigger_mode, profile;
       switch (config.groups.capture.TriggerMode)
       {
         case 0:
@@ -107,6 +108,20 @@ class EnsensoDriver
           break;
         default:
           trigger_mode = "Software";
+      }
+      switch (config.groups.stereo.OptimizationProfile)
+      {
+        case 0:
+          profile = "Aligned";
+          break;
+        case 1:
+          profile = "Diagonal";
+          break;
+        case 2:
+          profile = "AlignedAndDiagonal";
+          break;
+        default:
+          profile = "AlignedAndDiagonal";
       }
       ROS_DEBUG("---");
       ROS_DEBUG("Capture Parameters");
@@ -131,6 +146,7 @@ class EnsensoDriver
       ROS_DEBUG("Stereo Matching Parameters");
       ROS_DEBUG_STREAM("MinimumDisparity: "     << config.groups.stereo.MinimumDisparity);
       ROS_DEBUG_STREAM("NumberOfDisparities: "  << config.groups.stereo.NumberOfDisparities);
+      ROS_DEBUG_STREAM("OptimizationProfile: "  << profile);
       ROS_DEBUG_STREAM("Scaling: "              << config.groups.stereo.Scaling);
       ROS_DEBUG("Stream Parameters");
       ROS_DEBUG_STREAM("Cloud: "   << std::boolalpha << config.groups.stream.Cloud);
@@ -159,7 +175,10 @@ class EnsensoDriver
         ensenso_ptr_->setFlexView(config.groups.capture.FlexView, config.groups.capture.FlexViewImages);
       }
       // Stereo parameters
-      
+      ensenso_ptr_->setMinimumDisparity(config.groups.stereo.MinimumDisparity);
+      ensenso_ptr_->setNumberOfDisparities(config.groups.stereo.NumberOfDisparities);
+      ensenso_ptr_->setOptimizationProfile(profile);
+      ensenso_ptr_->setScaling(config.groups.stereo.Scaling);
       // Streaming parameters
       configureStreaming(config.groups.stream.Cloud, config.groups.stream.Images);
     }

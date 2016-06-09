@@ -185,6 +185,34 @@ public:
      * @note The response curve set by the HDR feature can currently not be modified. */
     bool setHdr (const bool enable=false) const;
     
+    /** @brief The minimum disparity in pixels where correspondences in the stereo image pair are being searched. 
+     * The resolution reductions by Scaling and Binning are automatically accounted for. The actual value used in the matching
+     * process is output in ScaledMinimumDisparity.
+     * @param[in] disparity An integer specifying the minimum disparity in pixels where the stereo matching algorithm 
+     * searches for correspondences between the two images.
+     * @return True if successful, false otherwise */
+    bool setMinimumDisparity (const int disparity=-64) const;
+    
+    /** @brief The number of disparities in pixels where correspondences in the stereo image pair are being searched, starting 
+     * at MinDisparity. The resolution reductions by Scaling and Binning are automatically accounted for. The actual value used
+     * in the matching process is output in ScaledNumberOfDisparities.
+     * @param[in] number An integer specifying the number of disparities in pixels where the images are being matched.
+     * @return True if successful, false otherwise 
+     * @note Note: The NumberOfDisparities parameter must be a multiple of 16.*/
+    bool setNumberOfDisparities (const int number=128) const;
+    
+    /** @brief The type of Semi-Global-Matching optimization carried out on the cost function.
+     * @param[in] profile Three possible types are accepted:
+     *  - "Aligned": Propagate cost along 4 paths, corresonding to the pixel axes of the rectified images.
+     *  - "Diagonal": Propagate cost on the 4 paths, corresponding the all 45 degree pixel diagonals.
+     *  - "AlignedAndDiagonal": Propagate along all 8 paths, aligned and diagonal. This setting yields the best matching results, 
+     * but slowest performance.
+     * @return True if successful, false otherwise 
+     * @note The Aligned and Diagonal profiles have similar runtime, but object edges that are approximately aligned with one of the
+     * propagation directions might be estimated less accurately. You might for example choose the Diagonal profile, if you expect you
+     * object edges to be mostly pixel axis aligned and Aligned for best results on non-pixel aligned object boundaries.*/
+    bool setOptimizationProfile (const std::string profile="AlignedAndDiagonal") const;
+    
     /** @brief Sets the pixel clock in MHz. If you have too many devices on the same bus the image transfer might 
      * fail when the clock is too high. This happens when the host PC does not request data from the camera fast enough. 
      * The sensor then outputs data faster than it can be transferred to the host and the cameras buffer will overflow. 
@@ -198,6 +226,18 @@ public:
      * @param[in] enable When set to true the camera's pattern projector will be switched on for the duration of the image exposure.
      * @return True if successful, false otherwise */
     bool setProjector (const bool enable=true) const;
+    
+    /** @brief Scaling allows to reduce the camera resolution by an arbitrary non-integer factor during rectification. 
+     * The camera raw images stay at their original size, but the rectified images, DisparityMap and PointMap will be 
+     * scaled by the specified factor to improve stereo matching runtime. This allows you to choose you own tradeoff 
+     * between image resolution and performance.
+     * @param[in] scaling An positive real number between 0.25 and 1.0.
+     * @return True if successful, false otherwise 
+     * @note Setting a new Scaling factor immediately clears and resizes the affected image nodes.
+     * @note As Scaling only affects the rectified images you might set a new Scaling factor and rerun ComputeDisparityMap 
+     * without capturing a new image pair! You could therefore use Scaling for fast object detection in low resolution, 
+     * and then perform measurements in higher resolution by setting Scaling to 1 without the need to capture an additional image pair.*/
+    bool setScaling (const float scaling=1.0) const;
     
     /** @brief The desired average image brightness in gray values used for AutoExposure and AutoGain.
      * @param[in] target Positive number from 40 to 210, specifying the desired average gray value of both images.

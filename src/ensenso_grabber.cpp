@@ -430,14 +430,17 @@ bool pcl::EnsensoGrabber::restoreDefaultConfiguration () const
   result &= setGainBoost();
   result &= setHardwareGamma();
   result &= setHdr();
+  result &= setMinimumDisparity();
+  result &= setNumberOfDisparities();
+  result &= setOptimizationProfile();
   result &= setPixelClock();
   result &= setProjector();
+  result &= setScaling();
   result &= setTargetBrightness();
   result &= setTriggerMode();
   result &= setUseDisparityMapAreaOfInterest();
   return result;
 }
-
 
 bool pcl::EnsensoGrabber::setAutoBlackLevel (const bool enable) const
 {
@@ -634,6 +637,54 @@ if (!device_open_)
   return (true);
 }
 
+bool pcl::EnsensoGrabber::setMinimumDisparity (const int disparity) const
+{
+if (!device_open_)
+    return (false);
+  try
+  {
+    camera_[itmParameters][itmDisparityMap][itmStereoMatching][itmMinimumDisparity].set (disparity);
+  }
+  catch (NxLibException &ex)
+  {
+    ensensoExceptionHandling (ex, "setMinimumDisparity");
+    return (false);
+  }
+  return (true);
+}
+
+bool pcl::EnsensoGrabber::setNumberOfDisparities (const int number) const
+{
+if (!device_open_)
+    return (false);
+  try
+  {
+    camera_[itmParameters][itmDisparityMap][itmStereoMatching][itmNumberOfDisparities].set (number);
+  }
+  catch (NxLibException &ex)
+  {
+    ensensoExceptionHandling (ex, "NumberOfDisparities");
+    return (false);
+  }
+  return (true);
+}
+
+bool pcl::EnsensoGrabber::setOptimizationProfile (const std::string profile) const
+{
+if (!device_open_)
+    return (false);
+  try
+  {
+    camera_[itmParameters][itmDisparityMap][itmStereoMatching][itmOptimizationProfile].set (profile);
+  }
+  catch (NxLibException &ex)
+  {
+    ensensoExceptionHandling (ex, "setOptimizationProfile");
+    return (false);
+  }
+  return (true);
+}
+
 bool pcl::EnsensoGrabber::setPixelClock (const int pixel_clock) const
 {
 if (!device_open_)
@@ -677,6 +728,22 @@ if (!device_open_)
   catch (NxLibException &ex)
   {
     ensensoExceptionHandling (ex, "setTargetBrightness");
+    return (false);
+  }
+  return (true);
+}
+
+bool pcl::EnsensoGrabber::setScaling (const float scaling) const
+{
+if (!device_open_)
+    return (false);
+  try
+  {
+    camera_[itmParameters][itmDisparityMap][itmScaling].set (scaling);
+  }
+  catch (NxLibException &ex)
+  {
+    ensensoExceptionHandling (ex, "setScaling");
     return (false);
   }
   return (true);

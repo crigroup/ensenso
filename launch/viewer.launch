@@ -2,6 +2,8 @@
 <launch>
   
   <arg name="serial" default="150534" />
+  <arg name="rqt" default="True" />
+  <arg name="rviz" default="False" />
   
   <!-- Ensenso node -->
   <node name="ensenso_driver" pkg="ensenso" type="ensenso_driver" ns="camera" output="screen"> 
@@ -12,7 +14,13 @@
     <param name="front_light"     type="bool"   value="false" />
     <param name="projector"       type="bool"   value="true" />
   </node>
-  <!-- RViz -->
-  <node name="rviz_node" pkg="rviz" type="rviz" args="-d $(find ensenso)/config/viewer.rviz" />
   
+  <group if="$(arg rqt)">
+    <node name="rqt_gui_node" pkg="rqt_gui" type="rqt_gui" args="--perspective-file $(find ensenso)/config/viewer.perspective" />
+  </group>
+  
+  <group if="$(arg rviz)">
+    <node name="rviz_node" pkg="rviz" type="rviz" args="-d $(find ensenso)/config/viewer.rviz" />
+  </group>
+
 </launch>
