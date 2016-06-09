@@ -25,11 +25,7 @@ find_package(Ensenso REQUIRED)
 add_service_files(FILES
   CapturePattern.srv
   ComputeCalibration.srv
-  ConfigureStreaming.srv
-  GridSpacing.srv
   InitCalibration.srv
-  Lights.srv
-  SetBool.srv
 )
 
 generate_messages(
@@ -39,7 +35,7 @@ generate_messages(
 )
 
 generate_dynamic_reconfigure_options(
-  cfg/CaptureParameters.cfg
+  cfg/CameraParameters.cfg
 )
 
 catkin_package(
@@ -72,6 +68,6 @@ add_definitions(${PCL_DEFINITIONS})
 add_library(ensenso_grabber src/ensenso_grabber.cpp)
 target_link_libraries(ensenso_grabber ${ENSENSO_LIBRARIES} ${PCL_LIBRARIES} ${catkin_LIBRARIES})
 
-add_executable(ensenso_node src/ensenso_node.cpp)
-add_dependencies(ensenso_node ${catkin_EXPORTED_TARGETS})
-target_link_libraries(ensenso_node ensenso_grabber ${PCL_LIBRARIES} ${catkin_LIBRARIES})
+add_executable(ensenso_driver src/ensenso_driver.cpp)
+add_dependencies(ensenso_driver ${catkin_EXPORTED_TARGETS})
+target_link_libraries(ensenso_driver ensenso_grabber ${PCL_LIBRARIES} ${catkin_LIBRARIES})
