@@ -4,6 +4,8 @@ ROS package developed by the [Control Robotics Intelligence Group](http://www.nt
 
 The **master** branch is compatible with both ROS **Hydro** and **Indigo**.
 
+**Update (13-Jun-2016)**: On going development continues in the **kinetic-devel** branch.
+
 ### Our setup
   * Ensenso camera N35 (Ethernet version) (Tested with N35-802-16-BL and N35-804-16-BL models)
   * ROS Hydro (Ubuntu 12.04, 64 bits) or ROS Indigo (Ubuntu 14.04, 64 bits)
