@@ -163,8 +163,7 @@ bool pcl::EnsensoGrabber::getCameraInfo(std::string cam, sensor_msgs::CameraInfo
 
 float pcl::EnsensoGrabber::getFramesPerSecond () const
 {
-  boost::mutex::scoped_lock lock (fps_mutex_);
-  return (fps_);
+  return 0;
 }
 
 std::string pcl::EnsensoGrabber::getName () const

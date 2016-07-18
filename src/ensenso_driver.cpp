@@ -55,13 +55,6 @@ class EnsensoDriver
       nh_private_.param("camera_frame_id", camera_frame_id_, std::string("ensenso_optical_frame"));
       if (!nh_private_.hasParam("camera_frame_id"))
         ROS_WARN_STREAM("Parameter [~camera_frame_id] not found, using default: " << camera_frame_id_);
-      bool stream_cloud, stream_images;
-      nh_private_.param("stream_cloud", stream_cloud, false);
-      if (!nh_private_.hasParam("stream_cloud"))
-        ROS_WARN_STREAM("Parameter [~stream_cloud] not found, using default: " << std::boolalpha << stream_cloud);
-      nh_private_.param("stream_images", stream_images, true);
-      if (!nh_private_.hasParam("stream_images"))
-        ROS_WARN_STREAM("Parameter [~stream_images] not found, using default: " << std::boolalpha << stream_images);
       // Advertise topics
       image_transport::ImageTransport it(nh_);
       l_raw_pub_ = it.advertiseCamera("left/image_raw", 2);
@@ -79,7 +72,7 @@ class EnsensoDriver
       dynamic_reconfigure::Server<ensenso::CameraParametersConfig>::CallbackType f;
       f = boost::bind(&EnsensoDriver::CameraParametersCallback, this, _1, _2);
       reconfigure_server_.setCallback(f);
-      // Start the camera. By default only stream images
+      // Start the camera. By default only stream images. You can use dynreconfigure to change the streaming
       configureStreaming(false);
       ensenso_ptr_->start();
     }
