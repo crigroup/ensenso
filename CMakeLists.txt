@@ -22,10 +22,10 @@ find_package(PCL REQUIRED)
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "/opt/ensenso/cmake")
 find_package(Ensenso REQUIRED)
 
-add_service_files(FILES
-  CapturePattern.srv
-  ComputeCalibration.srv
-  InitCalibration.srv
+add_service_files(
+  FILES
+  CalibrateHandEye.srv
+  EstimatePatternPose.srv
 )
 
 generate_messages(

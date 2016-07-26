@@ -1,5 +1,5 @@
-#ifndef __PCL_IO_ENSENSO_GRABBER__
-#define __PCL_IO_ENSENSO_GRABBER__
+#ifndef __ENSENSO_ENSENSO_GRABBER__
+#define __ENSENSO_ENSENSO_GRABBER__
 
 // PCL
 #include <pcl/pcl_config.h>
@@ -9,6 +9,8 @@
 #include <pcl/io/boost.h>
 #include <pcl/io/grabber.h>
 #include <pcl/common/synchronizer.h>
+// ROS
+
 // Others
 #include <boost/thread.hpp>
 #include <camera_info_manager/camera_info_manager.h>
@@ -51,6 +53,26 @@ public:
     /** @brief Destructor inherited from the Grabber interface. It never throws. */
     virtual ~EnsensoGrabber () throw ();
     
+    /** @brief With this command you can calibrate the position of the camera with respect to a robot. 
+    * The calibration routine currently supports two types of setups: either your camera is fixed with 
+    * respect to the robot origin, or your camera mounted on the robot hand and is moving with the robot.
+    * @param[in] robot_poses A list of robot poses, 1 for each pattern acquired (in the same order)
+    * @param[in] camera_seed TODO
+    * @param[in] pattern_seed TODO
+    * @param[in] setup Moving or Fixed, please refer to the Ensenso documentation
+    * @param[out] estimated_camera_pose TODO
+    * @param[out] iterations TODO
+    * @param[out] reprojection_error TODO
+    * @return True if successful, false otherwise
+    * @warning This can take up to 120 seconds */
+    bool calibrateHandEye ( const std::vector<Eigen::Affine3d, Eigen::aligned_allocator<Eigen::Affine3d> > &robot_poses,
+                            const Eigen::Affine3d &camera_seed,
+                            const Eigen::Affine3d &pattern_seed,
+                            const std::string setup,
+                            Eigen::Affine3d &estimated_camera_pose,
+                            int &iterations,
+                            double &reprojection_error) const;
+    
     /** @brief Closes the Ensenso device
      * @return True if successful, false otherwise */
     bool closeDevice ();
@@ -60,6 +82,32 @@ public:
      * @warning If you do not close the TCP port the program might exit with the port still open, if it is the case
      * use @code ps -ef @endcode and @code kill PID @endcode to kill the application and effectively close the port. */
     bool closeTcpPort (void);
+    
+    /** @brief Collects a calibration pattern
+     * @param[in] buffer Specifies whether the pattern should be added to the pattern buffer.
+     * @return the number of calibration patterns stored in the nxTree, -1 on error
+     * @warning A device must be opened and must not be running.*/
+    int collectPattern (const bool buffer=true) const;
+    
+    /** @brief Decodes the pattern grid size and thickness
+     * @return the grid size in mm*/
+    double decodePattern () const;
+    
+    /** @brief Estimate the calibration pattern pose
+     * @param[out] pose the calibration pattern pose
+     * @param[in] average Specifies if all pattern point coordinates in the buffer 
+     * should be averaged to produce a more precise pose measurement. This will only 
+     * produce a correct result if all patterns in the buffer originate from 
+     * multiple images of the same pattern in the same pose.
+     * @return true if successful, false otherwise
+     * @warning A device must be opened and must not be running.
+     * @note At least one calibration pattern must have been collected before, use @ref collectPattern before */
+    bool estimatePatternPose (Eigen::Affine3d &pose, const bool average=false) const;
+    
+    /** @brief Clears the pattern buffers of monocular and stereo pattern observations. 
+     * @return True if successful, false otherwise
+     * @note The counters PatternCount and MonocularPatternCount will be zero after clearing.*/
+    bool discardPatterns () const;
     
     /** @brief Searches for available devices
      * @returns The number of Ensenso devices connected */
@@ -77,14 +125,18 @@ public:
      */
     bool getCameraInfo(std::string cam, sensor_msgs::CameraInfo &cam_info) const;
     
+    /** @brief Obtain the number of frames per second (FPS) */
+    float getFramesPerSecond () const;
+    
+    /** @brief Gets the number of collected patterns with successful observations in two cameras.
+     * @returns The number of pattern in the camera buffer */
+    int getPatternCount () const;
+    
     /** @brief Capture a single point cloud and store it
      * @param[out] cloud The cloud to be filled
      * @return True if successful, false otherwise
      * @warning A device must be opened and not running */
     bool grabSingleCloud (pcl::PointCloud<pcl::PointXYZ> &cloud);
-
-    /** @brief Obtain the number of frames per second (FPS) */
-    float getFramesPerSecond () const;
     
     /** @brief Check if the data acquisition is still running
      * @return True if running, false otherwise */
@@ -173,6 +225,11 @@ public:
      * @param[in] enable When set to true an additional analog gain boost on the camera will be enabled.
      * @return True if successful, false otherwise */
     bool setGainBoost (const bool enable=false) const;
+    
+    /** @brief Sets the grid spacing of the calibration pattern
+     * @param[in] grid_spacing distance of two neighboring grid points along the pattern's x or y axis.
+     * @return True if successful, false otherwise */
+    bool setGridSpacing (const double grid_spacing) const;
     
     /** @brief Enables the camera's internal analog gamma correction. This boosts dark pixels while compressing higher brightness values.
      * @param[in] enable When set to true the cameras analog gamma correction will be enabled.
@@ -320,7 +377,21 @@ protected:
      * @param isFlt is float
      * @return the OpenCV type as a string */
     std::string static getOpenCVType (const int channels, const int bpe, const bool isFlt);
-
+    
+    /** @brief Converts a JSON string into an Eigen::Affine3d
+     * @param[in] json The input JSON transformation
+     * @param[out] matrix An Eigen matrix containing the resulting transformation
+     * @return True if successful, false otherwise
+     */
+    bool jsonToMatrix (const std::string json, Eigen::Affine3d &matrix) const;
+    
+    /** @brief Converts an Eigen::Affine3d into a JSON string transformation (4x4) 
+     * @param[in] matrix An Eigen matrix
+     * @param[out] json The output JSON transformation
+     * @return True if successful, false otherwise
+     */
+    bool matrixToJson (const Eigen::Affine3d &matrix, std::string &json, const bool pretty_format=true) const;
+    
     /** @brief Continuously asks for images and or point clouds data from the device and publishes them if available.
      * PCL time stamps are filled for both the images and clouds grabbed (see @ref getPCLStamp)
      * @note The cloud time stamp is the RAW image time stamp */

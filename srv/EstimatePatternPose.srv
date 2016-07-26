@@ -1,0 +1,10 @@
+bool                add_to_buffer
+bool                discard_patterns
+bool                average
+bool                decode
+float32             grid_spacing
+--- 
+bool                success
+int32               pattern_count
+float32             grid_spacing
+geometry_msgs/Pose  pose

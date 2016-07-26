@@ -1,0 +1,11 @@
+# TODO: The pattern_poses field is not used yet.
+geometry_msgs/PoseArray   robot_poses
+geometry_msgs/PoseArray   pattern_poses
+geometry_msgs/Pose        camera_seed
+geometry_msgs/Pose        pattern_seed
+string                    setup
+--- 
+bool                      success
+geometry_msgs/Pose        estimated_camera_pose
+int32                     iterations
+float64                   reprojection_error

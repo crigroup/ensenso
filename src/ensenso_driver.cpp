@@ -4,6 +4,8 @@
 #include <cv_bridge/cv_bridge.h>
 #include <pcl_ros/point_cloud.h>
 #include <sensor_msgs/PointCloud2.h>
+// Conversions
+#include <eigen_conversions/eigen_msg.h>
 // Ensenso grabber
 #include <ensenso/ensenso_grabber.h>
 // Image transport
@@ -13,6 +15,9 @@
 // Dynamic reconfigure
 #include <dynamic_reconfigure/server.h>
 #include <ensenso/CameraParametersConfig.h>
+// Services
+#include <ensenso/CalibrateHandEye.h>
+#include <ensenso/EstimatePatternPose.h>
 
 
 // Typedefs
@@ -26,6 +31,8 @@ class EnsensoDriver
   private:
     // ROS
     ros::NodeHandle                   nh_, nh_private_;
+    ros::ServiceServer                pattern_srv_;
+    ros::ServiceServer                calibrate_srv_;
     dynamic_reconfigure::Server<ensenso::CameraParametersConfig> reconfigure_server_;
     // Images
     image_transport::CameraPublisher  l_raw_pub_;
@@ -75,6 +82,10 @@ class EnsensoDriver
       // Start the camera. By default only stream images. You can use dynreconfigure to change the streaming
       configureStreaming(false);
       ensenso_ptr_->start();
+      // Advertise services
+      calibrate_srv_ = nh_.advertiseService("calibrate_handeye", &EnsensoDriver::calibrateHandEyeCB, this);
+      pattern_srv_ = nh_.advertiseService("estimate_pattern_pose", &EnsensoDriver::estimatePatternPoseCB, this);
+      ROS_INFO("Finished [ensenso_driver] initialization");
     }
     
     ~EnsensoDriver()
@@ -82,6 +93,44 @@ class EnsensoDriver
       connection_.disconnect();
       ensenso_ptr_->closeTcpPort();
       ensenso_ptr_->closeDevice();
+    }
+    
+    bool calibrateHandEyeCB(ensenso::CalibrateHandEye::Request& req, ensenso::CalibrateHandEye::Response &res)
+    {
+      bool was_running = ensenso_ptr_->isRunning();
+      if (was_running)
+        ensenso_ptr_->stop();
+      // Check consistency between robot and pattern poses
+      // TODO: Include request.pattern_poses in the PatternCount check
+      if ( req.robot_poses.poses.size() != ensenso_ptr_->getPatternCount() )
+      {
+        ROS_WARN("The number of robot_poses differs from the pattern count in the camera buffer");
+        if (was_running)
+          ensenso_ptr_->start();
+        return true;
+      }
+      // Convert poses to Eigen::Affine3d 
+      std::vector<Eigen::Affine3d, Eigen::aligned_allocator<Eigen::Affine3d> > robot_eigen_list;
+      for (size_t i = 0; i < req.robot_poses.poses.size(); i++) {
+        Eigen::Affine3d pose;
+        tf::poseMsgToEigen(req.robot_poses.poses[i], pose);
+        robot_eigen_list.push_back(pose);
+      }
+      // Calibrate
+      Eigen::Affine3d camera_seed, pattern_seed, estimated_camera_pose;
+      tf::poseMsgToEigen(req.camera_seed, camera_seed);
+      tf::poseMsgToEigen(req.pattern_seed, pattern_seed);
+      ROS_INFO("calibrateHandEye: It may take up to 5 minutes...");
+      res.success = ensenso_ptr_->calibrateHandEye(robot_eigen_list, camera_seed, pattern_seed, 
+                      req.setup, estimated_camera_pose, res.iterations, res.reprojection_error);
+      if (res.success)
+      {
+        ROS_INFO("Calibration computation finished");
+        tf::poseEigenToMsg(estimated_camera_pose, res.estimated_camera_pose);
+      }
+      if (was_running)
+        ensenso_ptr_->start();
+      return true;
     }
     
     void CameraParametersCallback(ensenso::CameraParametersConfig &config, uint32_t level)
@@ -204,6 +253,52 @@ class EnsensoDriver
         boost::function<void(
             const boost::shared_ptr<PointCloudXYZ>&)> f = boost::bind (&EnsensoDriver::grabberCallback, this, _1);
         connection_ = ensenso_ptr_->registerCallback(f);
+      }
+      if (was_running)
+        ensenso_ptr_->start();
+      return true;
+    }
+    
+    bool estimatePatternPoseCB(ensenso::EstimatePatternPose::Request& req, ensenso::EstimatePatternPose::Response &res)
+    {
+      bool was_running = ensenso_ptr_->isRunning();
+      if (was_running)
+        ensenso_ptr_->stop();
+      // Check consistency
+      if (!req.decode && req.grid_spacing <= 0)
+      {
+        ROS_WARN("grid_spacing not specify. Forgot to set the request.decode = True?");
+        if (was_running)
+          ensenso_ptr_->start();
+        return true;
+      }
+      // Discard previously saved patterns
+      if (req.discard_patterns)
+        ensenso_ptr_->discardPatterns();
+      // Set the grid spacing
+      if (req.decode)
+      {
+        res.grid_spacing = ensenso_ptr_->decodePattern();
+        // Check consistency
+        if (res.grid_spacing <= 0)
+        {
+          ROS_WARN("Couldn't decode calibration pattern");
+          if (was_running)
+            ensenso_ptr_->start();
+          return true;
+        }
+      }
+      else
+        res.grid_spacing = req.grid_spacing;
+      ensenso_ptr_->setGridSpacing(res.grid_spacing);
+      // Collect pattern
+      res.pattern_count = ensenso_ptr_->collectPattern(req.add_to_buffer);
+      if (res.pattern_count != -1)
+      {
+        // Estimate pattern pose
+        Eigen::Affine3d pattern_pose;
+        res.success = ensenso_ptr_->estimatePatternPose(pattern_pose);
+        tf::poseEigenToMsg(pattern_pose, res.pose);
       }
       if (was_running)
         ensenso_ptr_->start();

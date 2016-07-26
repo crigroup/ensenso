@@ -56,6 +56,100 @@ pcl::EnsensoGrabber::~EnsensoGrabber () throw ()
   }
 }
 
+bool pcl::EnsensoGrabber::calibrateHandEye (const std::vector<Eigen::Affine3d, Eigen::aligned_allocator<Eigen::Affine3d> > &robot_poses,
+                                            const Eigen::Affine3d &camera_seed,
+                                            const Eigen::Affine3d &pattern_seed,
+                                            const std::string setup,
+                                            Eigen::Affine3d &estimated_camera_pose,
+                                            int &iterations,
+                                            double &reprojection_error) const
+{
+  if ( (*root_)[itmVersion][itmMajor] <= 1 && (*root_)[itmVersion][itmMinor] < 3)
+  {
+    PCL_WARN("EnsensoSDK 1.3.x fixes bugs into calibration optimization\n");
+    PCL_WARN("please update your SDK! http://www.ensenso.de/support/sdk-download\n");
+  }
+  NxLibCommand calibrate (cmdCalibrateHandEye);
+  try
+  {
+    // Check consistency
+    if (!boost::iequals (setup, valFixed) && !boost::iequals (setup, valMoving))
+    {
+      PCL_WARN("Received invalid setup value: %s\n", setup.c_str());
+      return (false);
+    }
+    // Set Hand-Eye calibration parameters
+    PCL_DEBUG("Setting calibration parameters\n");
+    std::string target;
+    if (boost::iequals (setup, valFixed))
+      target = valWorkspace;
+    else
+      target = valHand;
+    Eigen::Affine3d eigen_pose;
+    // Feed robot transformations
+    PCL_DEBUG("Populating robot poses\n");
+    std::vector<std::string> json_poses;
+    json_poses.resize (robot_poses.size ());
+    for (uint i = 0; i < robot_poses.size(); ++i)
+    {
+      eigen_pose = robot_poses[i];
+      eigen_pose.translation () *= 1000.0; // meters -> millimeters
+      matrixToJson(eigen_pose, json_poses[i]);
+    }
+    PCL_DEBUG("Executing...\n");
+    // Convert camera seed to Json
+    std::string json_camera_seed, json_pattern_seed;
+    PCL_DEBUG("Populating seeds\n");
+    eigen_pose = camera_seed;
+    eigen_pose.translation () *= 1000.0; // meters -> millimeters
+    matrixToJson(eigen_pose, json_camera_seed);
+    PCL_DEBUG("camera_seed:\n %s\n", json_camera_seed.c_str());
+    // Convert pattern seed to Json
+    eigen_pose = pattern_seed;
+    eigen_pose.translation () *= 1000.0; // meters -> millimeters
+    matrixToJson(pattern_seed, json_pattern_seed);
+    PCL_DEBUG("pattern_seed:\n %s\n", json_pattern_seed.c_str());
+    // Populate command parameters
+    // It's very important populate the parameters in alphabetical order and at the same time!
+    calibrate.parameters ()[itmLink].setJson(json_camera_seed, false);
+    calibrate.parameters ()[itmPatternPose].setJson(json_pattern_seed, false);
+    calibrate.parameters ()[itmSetup] = setup;
+    calibrate.parameters ()[itmTarget] = target;
+    for (uint i = 0; i < json_poses.size(); ++i)
+      calibrate.parameters ()[itmTransformations][i].setJson(json_poses[i], false);
+    // Execute the command
+    calibrate.execute ();  // It might take some minutes
+    if (calibrate.successful())
+    {
+      iterations = calibrate.result()[itmIterations].asInt();
+      std::string json_pose = calibrate.result()[itmLink].asJson (true);
+      reprojection_error = calibrate.result()[itmReprojectionError].asDouble();
+      PCL_INFO("Result:\n %s\n", json_pose.c_str());
+      // Estimated camera pose
+      jsonToMatrix(json_pose, estimated_camera_pose);
+      estimated_camera_pose.translation () /= 1000.0; // millimeters -> meters
+      //~ try
+      //~ {
+        //~ // Other output parameters
+        //~ // FIXME: Even if succeeded, sometimes we cannot access Iterations and Reprojection error
+        //~ iterations = calibrate.result()[itmIterations].asInt();
+        //~ reprojection_error = calibrate.result()[itmReprojectionError].asDouble();
+      //~ }
+      //~ catch (...) {
+        //~ // Do nothing
+      //~ }
+      return (true);
+    }
+    else
+      return (false);
+  }
+  catch (NxLibException &ex)
+  {
+    ensensoExceptionHandling (ex, "calibrateHandEye");
+    return (false);
+  }
+}
+
 bool pcl::EnsensoGrabber::closeDevice ()
 {
   if (!device_open_)
@@ -90,6 +184,85 @@ bool pcl::EnsensoGrabber::closeTcpPort ()
     return (false);
   }
   return (true);
+}
+
+int pcl::EnsensoGrabber::collectPattern (const bool buffer) const
+{
+  if (!device_open_ || running_)
+    return (-1);
+  try
+  {
+    NxLibCommand (cmdCapture).execute ();
+    NxLibCommand collect_pattern (cmdCollectPattern);
+    collect_pattern.parameters ()[itmBuffer].set (buffer);
+    collect_pattern.parameters ()[itmDecodeData].set (false);
+    collect_pattern.execute ();
+  }
+  catch (NxLibException &ex)
+  {
+    ensensoExceptionHandling (ex, "collectPattern");
+    return (-1);
+  }
+  return getPatternCount();
+}
+
+double pcl::EnsensoGrabber::decodePattern () const
+{
+  if (!device_open_ || running_)
+    return (-1);
+  NxLibCommand collect_pattern (cmdCollectPattern);
+  try
+  {
+    NxLibCommand (cmdCapture).execute ();
+    collect_pattern.parameters ()[itmBuffer].set (false);
+    collect_pattern.parameters ()[itmDecodeData].set (true);
+    collect_pattern.execute ();
+  }
+  catch (NxLibException &ex)
+  {
+    ensensoExceptionHandling (ex, "decodePattern");
+    return (-1);
+  }
+  return collect_pattern.result()[itmGridSpacing].asDouble();
+}
+
+bool pcl::EnsensoGrabber::discardPatterns () const
+{
+  if (!device_open_ || running_)
+    return (false);
+  try
+  {
+    NxLibCommand (cmdDiscardPatterns).execute ();
+  }
+  catch (NxLibException &ex)
+  {
+    ensensoExceptionHandling (ex, "discardPatterns");
+    return (false);
+  }
+  return (true);
+}
+
+bool pcl::EnsensoGrabber::estimatePatternPose (Eigen::Affine3d &pose, const bool average) const
+{
+  if (!device_open_ || running_)
+    return (false);
+  try
+  {
+    NxLibCommand estimate_pattern_pose (cmdEstimatePatternPose);
+    estimate_pattern_pose.parameters ()[itmAverage].set (average);
+    estimate_pattern_pose.execute ();
+    NxLibItem tf = estimate_pattern_pose.result ()[itmPatternPose];
+    // Convert tf into a matrix
+    if (!jsonToMatrix (tf.asJson (), pose))
+      return (false);
+    pose.translation () /= 1000.0;  // Convert translation in meters (Ensenso API returns milimeters)
+    return (true);
+  }
+  catch (NxLibException &ex)
+  {
+    ensensoExceptionHandling (ex, "estimateCalibrationPatternPoses");
+    return (false);
+  }
 }
 
 int pcl::EnsensoGrabber::enumDevices () const
@@ -189,6 +362,11 @@ pcl::uint64_t pcl::EnsensoGrabber::getPCLStamp (const double ensenso_stamp)
 #endif
 }
 
+int pcl::EnsensoGrabber::getPatternCount () const
+{
+  return ( (*root_)[itmParameters][itmPatternCount].asInt ());
+}
+
 bool pcl::EnsensoGrabber::grabSingleCloud (pcl::PointCloud<pcl::PointXYZ> &cloud)
 {
   if (!device_open_)
@@ -241,6 +419,73 @@ bool pcl::EnsensoGrabber::isRunning () const
 bool pcl::EnsensoGrabber::isTcpPortOpen () const
 {
   return (tcp_open_);
+}
+
+bool pcl::EnsensoGrabber::jsonToMatrix (const std::string json, Eigen::Affine3d &matrix) const
+{
+  try
+  {
+    NxLibCommand convert (cmdConvertTransformation);
+    convert.parameters ()[itmTransformation].setJson (json);
+    convert.execute ();
+    Eigen::Affine3d tmp (Eigen::Affine3d::Identity ());
+    // Rotation
+    tmp.linear ().col (0) = Eigen::Vector3d (convert.result ()[itmTransformation][0][0].asDouble (),
+                         convert.result ()[itmTransformation][0][1].asDouble (),
+                         convert.result ()[itmTransformation][0][2].asDouble ());
+    tmp.linear ().col (1) = Eigen::Vector3d (convert.result ()[itmTransformation][1][0].asDouble (),
+                         convert.result ()[itmTransformation][1][1].asDouble (),
+                         convert.result ()[itmTransformation][1][2].asDouble ());
+    tmp.linear ().col (2) = Eigen::Vector3d (convert.result ()[itmTransformation][2][0].asDouble (),
+                         convert.result ()[itmTransformation][2][1].asDouble (),
+                         convert.result ()[itmTransformation][2][2].asDouble ());
+    // Translation
+    tmp.translation () = Eigen::Vector3d (convert.result ()[itmTransformation][3][0].asDouble (),
+                        convert.result ()[itmTransformation][3][1].asDouble (),
+                        convert.result ()[itmTransformation][3][2].asDouble ());
+    matrix = tmp;
+    return (true);
+  }
+  catch (NxLibException &ex)
+  {
+    ensensoExceptionHandling (ex, "jsonToMatrix");
+    return (false);
+  }
+}
+
+bool pcl::EnsensoGrabber::matrixToJson (const Eigen::Affine3d &matrix, std::string &json, 
+                                        const bool pretty_format) const
+{
+  try
+  {
+    NxLibCommand convert (cmdConvertTransformation);
+    // Rotation
+    convert.parameters ()[itmTransformation][0][0].set (matrix.linear ().col (0)[0]);
+    convert.parameters ()[itmTransformation][0][1].set (matrix.linear ().col (0)[1]);
+    convert.parameters ()[itmTransformation][0][2].set (matrix.linear ().col (0)[2]);
+    convert.parameters ()[itmTransformation][0][3].set (0.0);
+    convert.parameters ()[itmTransformation][1][0].set (matrix.linear ().col (1)[0]);
+    convert.parameters ()[itmTransformation][1][1].set (matrix.linear ().col (1)[1]);
+    convert.parameters ()[itmTransformation][1][2].set (matrix.linear ().col (1)[2]);
+    convert.parameters ()[itmTransformation][1][3].set (0.0);
+    convert.parameters ()[itmTransformation][2][0].set (matrix.linear ().col (2)[0]);
+    convert.parameters ()[itmTransformation][2][1].set (matrix.linear ().col (2)[1]);
+    convert.parameters ()[itmTransformation][2][2].set (matrix.linear ().col (2)[2]);
+    convert.parameters ()[itmTransformation][2][3].set (0.0);
+    // Translation
+    convert.parameters ()[itmTransformation][3][0].set (matrix.translation ()[0]);
+    convert.parameters ()[itmTransformation][3][1].set (matrix.translation ()[1]);
+    convert.parameters ()[itmTransformation][3][2].set (matrix.translation ()[2]);
+    convert.parameters ()[itmTransformation][3][3].set (1.0);
+    convert.execute ();
+    json = convert.result ()[itmTransformation].asJson (pretty_format);
+    return (true);
+  }
+  catch (NxLibException &ex)
+  {
+    ensensoExceptionHandling (ex, "matrixToJson");
+    return (false);
+  }
 }
 
 bool pcl::EnsensoGrabber::openDevice (std::string serial)
@@ -499,7 +744,8 @@ bool pcl::EnsensoGrabber::setBinning (const int binning) const
   }
   catch (NxLibException &ex)
   {
-    ensensoExceptionHandling (ex, "setBinning");
+    // TODO: Handle better setBinning exceptions
+    //~ ensensoExceptionHandling (ex, "setBinning");
     return (false);
   }
   return (true);
@@ -550,7 +796,8 @@ if (!device_open_)
   }
   catch (NxLibException &ex)
   {
-    ensensoExceptionHandling (ex, "setFlexView");
+    // TODO: Handle better setFlexView exceptions
+    //~ ensensoExceptionHandling (ex, "setFlexView");
     return (false);
   }
   return (true);
@@ -599,6 +846,22 @@ if (!device_open_)
   catch (NxLibException &ex)
   {
     ensensoExceptionHandling (ex, "setGainBoost");
+    return (false);
+  }
+  return (true);
+}
+
+bool pcl::EnsensoGrabber::setGridSpacing (const double grid_spacing) const
+{
+if (!device_open_)
+    return (false);
+  try
+  {
+    (*root_)[itmParameters][itmPattern][itmGridSpacing].set (grid_spacing);
+  }
+  catch (NxLibException &ex)
+  {
+    ensensoExceptionHandling (ex, "setGridSpacing");
     return (false);
   }
   return (true);

@@ -1,8 +1,0 @@
-bool                      store_to_eeprom
-geometry_msgs/Pose        seed
-geometry_msgs/PoseArray   robotposes
---- 
-bool                      success
-geometry_msgs/Pose        result
-int32                     iterations
-float64                   reprojection_error
