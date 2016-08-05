@@ -162,8 +162,8 @@ class EnsensoDriver
           profile = "Diagonal";
           break;
         case 2:
-          profile = "AlignedAndDiagonal";
-          break;
+            profile = "AlignedAndDiagonal";
+            break;
         default:
           profile = "AlignedAndDiagonal";
       }
@@ -192,6 +192,17 @@ class EnsensoDriver
       ROS_DEBUG_STREAM("NumberOfDisparities: "  << config.groups.stereo.NumberOfDisparities);
       ROS_DEBUG_STREAM("OptimizationProfile: "  << profile);
       ROS_DEBUG_STREAM("Scaling: "              << config.groups.stereo.Scaling);
+        ROS_DEBUG("Advanced Matching Parameters");
+        ROS_DEBUG_STREAM("DepthChangeCost: " << config.groups.stereo.DepthChangeCost);
+        ROS_DEBUG_STREAM("DepthStepCost: " << config.groups.stereo.DepthStepCost);
+        ROS_DEBUG_STREAM("ShadowingThreshold: " << config.groups.stereo.ShadowingThreshold);
+        ROS_DEBUG("Postprocessing Parameters");
+        ROS_DEBUG_STREAM("UniquenessRatio: " << config.groups.postproc.UniquenessRatio);
+        ROS_DEBUG_STREAM("MedianFilterRadius: "<< config.groups.postproc.MedianFilterRadius);
+        ROS_DEBUG_STREAM("SpeckleComponentThreshold: "<< config.groups.postproc.SpeckleComponentThreshold);
+        ROS_DEBUG_STREAM("SpeckleRegionSize: "<< config.groups.postproc.SpeckleRegionSize);
+        ROS_DEBUG_STREAM("FillBorderSpread: "<< config.groups.postproc.FillBorderSpread);
+        ROS_DEBUG_STREAM("FillRegionSize: " << config.groups.postproc.FillRegionSize);
       ROS_DEBUG("Stream Parameters");
       ROS_DEBUG_STREAM("Cloud: "   << std::boolalpha << config.groups.stream.Cloud);
       ROS_DEBUG_STREAM("Images: "   << std::boolalpha << config.groups.stream.Images);
@@ -223,10 +234,20 @@ class EnsensoDriver
       ensenso_ptr_->setNumberOfDisparities(config.groups.stereo.NumberOfDisparities);
       ensenso_ptr_->setOptimizationProfile(profile);
       ensenso_ptr_->setScaling(config.groups.stereo.Scaling);
-      // Streaming parameters
-      configureStreaming(config.groups.stream.Cloud, config.groups.stream.Images);
+        ensenso_ptr_->setDepthChangeCost(config.groups.stereo.DepthChangeCost);
+        ensenso_ptr_->setDepthStepCost(config.groups.stereo.DepthStepCost);
+        ensenso_ptr_->setShadowingThreshold(config.groups.stereo.ShadowingThreshold);
+        //Postprocessing parameters
+        ensenso_ptr_->setUniquenessRatio(config.groups.postproc.UniquenessRatio);
+        ensenso_ptr_->setMedianFilterRadius(config.groups.postproc.MedianFilterRadius);
+        ensenso_ptr_->setSpeckleComponentThreshold(config.groups.postproc.SpeckleComponentThreshold);
+        ensenso_ptr_->setSpeckleRegionSize(config.groups.postproc.SpeckleRegionSize);
+        ensenso_ptr_->setFillBorderSpread(config.groups.postproc.FillBorderSpread);
+        ensenso_ptr_->setFillRegionSize(config.groups.postproc.FillRegionSize);
+        // Streaming parameters
+        configureStreaming(config.groups.stream.Cloud, config.groups.stream.Images);
     }
-    
+
     bool configureStreaming(const bool cloud, const bool images=true)
     {
       bool was_running = ensenso_ptr_->isRunning();
@@ -260,101 +281,101 @@ class EnsensoDriver
         ensenso_ptr_->start();
       return true;
     }
-    
+
     bool estimatePatternPoseCB(ensenso::EstimatePatternPose::Request& req, ensenso::EstimatePatternPose::Response &res)
     {
-      bool was_running = ensenso_ptr_->isRunning();
-      if (was_running)
-        ensenso_ptr_->stop();
-      // Check consistency
-      if (!req.decode && req.grid_spacing <= 0)
-      {
-        ROS_WARN("grid_spacing not specify. Forgot to set the request.decode = True?");
+        bool was_running = ensenso_ptr_->isRunning();
         if (was_running)
-          ensenso_ptr_->start();
-        return true;
-      }
-      // Discard previously saved patterns
-      if (req.discard_patterns)
-        ensenso_ptr_->discardPatterns();
-      // Set the grid spacing
-      if (req.decode)
-      {
-        res.grid_spacing = ensenso_ptr_->decodePattern();
+            ensenso_ptr_->stop();
         // Check consistency
-        if (res.grid_spacing <= 0)
+        if (!req.decode && req.grid_spacing <= 0)
         {
-          ROS_WARN("Couldn't decode calibration pattern");
-          if (was_running)
-            ensenso_ptr_->start();
-          return true;
+            ROS_WARN("grid_spacing not specify. Forgot to set the request.decode = True?");
+            if (was_running)
+                ensenso_ptr_->start();
+            return true;
         }
-      }
-      else
-        res.grid_spacing = req.grid_spacing;
-      ensenso_ptr_->setGridSpacing(res.grid_spacing);
-      // Collect pattern
-      res.pattern_count = ensenso_ptr_->collectPattern(req.add_to_buffer);
-      if (res.pattern_count != -1)
-      {
-        // Estimate pattern pose
-        Eigen::Affine3d pattern_pose;
-        res.success = ensenso_ptr_->estimatePatternPose(pattern_pose);
-        tf::poseEigenToMsg(pattern_pose, res.pose);
-      }
-      if (was_running)
-        ensenso_ptr_->start();
-      return true;
+        // Discard previously saved patterns
+        if (req.discard_patterns)
+            ensenso_ptr_->discardPatterns();
+        // Set the grid spacing
+        if (req.decode)
+        {
+            res.grid_spacing = ensenso_ptr_->decodePattern();
+            // Check consistency
+            if (res.grid_spacing <= 0)
+            {
+                ROS_WARN("Couldn't decode calibration pattern");
+                if (was_running)
+                    ensenso_ptr_->start();
+                return true;
+            }
+        }
+        else
+            res.grid_spacing = req.grid_spacing;
+        ensenso_ptr_->setGridSpacing(res.grid_spacing);
+        // Collect pattern
+        res.pattern_count = ensenso_ptr_->collectPattern(req.add_to_buffer);
+        if (res.pattern_count != -1)
+        {
+            // Estimate pattern pose
+            Eigen::Affine3d pattern_pose;
+            res.success = ensenso_ptr_->estimatePatternPose(pattern_pose);
+            tf::poseEigenToMsg(pattern_pose, res.pose);
+        }
+        if (was_running)
+            ensenso_ptr_->start();
+        return true;
     }
-    
+
     void grabberCallback( const boost::shared_ptr<PointCloudXYZ>& cloud)
     {
-      // Point cloud
-      cloud->header.frame_id = camera_frame_id_;
-      sensor_msgs::PointCloud2 cloud_msg;
-      pcl::toROSMsg(*cloud, cloud_msg);
-      cloud_pub_.publish(cloud_msg);
+        // Point cloud
+        cloud->header.frame_id = camera_frame_id_;
+        sensor_msgs::PointCloud2 cloud_msg;
+        pcl::toROSMsg(*cloud, cloud_msg);
+        cloud_pub_.publish(cloud_msg);
     }
-    
+
     void grabberCallback( const boost::shared_ptr<PairOfImages>& rawimages, const boost::shared_ptr<PairOfImages>& rectifiedimages)
     {
-      // Get cameras info
-      sensor_msgs::CameraInfo linfo, rinfo;
-      ensenso_ptr_->getCameraInfo("Left", linfo);
-      ensenso_ptr_->getCameraInfo("Right", rinfo);
-      linfo.header.frame_id = camera_frame_id_;
-      rinfo.header.frame_id = camera_frame_id_;
-      // Images
-      l_raw_pub_.publish(*toImageMsg(rawimages->first), linfo, ros::Time::now());
-      r_raw_pub_.publish(*toImageMsg(rawimages->second), rinfo, ros::Time::now());
-      l_rectified_pub_.publish(toImageMsg(rectifiedimages->first));
-      r_rectified_pub_.publish(toImageMsg(rectifiedimages->second));
+        // Get cameras info
+        sensor_msgs::CameraInfo linfo, rinfo;
+        ensenso_ptr_->getCameraInfo("Left", linfo);
+        ensenso_ptr_->getCameraInfo("Right", rinfo);
+        linfo.header.frame_id = camera_frame_id_;
+        rinfo.header.frame_id = camera_frame_id_;
+        // Images
+        l_raw_pub_.publish(*toImageMsg(rawimages->first), linfo, ros::Time::now());
+        r_raw_pub_.publish(*toImageMsg(rawimages->second), rinfo, ros::Time::now());
+        l_rectified_pub_.publish(toImageMsg(rectifiedimages->first));
+        r_rectified_pub_.publish(toImageMsg(rectifiedimages->second));
     }
-    
+
     void grabberCallback( const boost::shared_ptr<PointCloudXYZ>& cloud,
                           const boost::shared_ptr<PairOfImages>& rawimages, const boost::shared_ptr<PairOfImages>& rectifiedimages)
     {
-      // Get cameras info
-      sensor_msgs::CameraInfo linfo, rinfo;
-      ensenso_ptr_->getCameraInfo("Left", linfo);
-      ensenso_ptr_->getCameraInfo("Right", rinfo);
-      linfo.header.frame_id = camera_frame_id_;
-      rinfo.header.frame_id = camera_frame_id_;
-      // Images
-      l_raw_pub_.publish(*toImageMsg(rawimages->first), linfo, ros::Time::now());
-      r_raw_pub_.publish(*toImageMsg(rawimages->second), rinfo, ros::Time::now());
-      l_rectified_pub_.publish(toImageMsg(rectifiedimages->first));
-      r_rectified_pub_.publish(toImageMsg(rectifiedimages->second));
-      // Camera_info
-      linfo_pub_.publish(linfo);
-      rinfo_pub_.publish(rinfo);
-      // Point cloud
-      cloud->header.frame_id = camera_frame_id_;
-      sensor_msgs::PointCloud2 cloud_msg;
-      pcl::toROSMsg(*cloud, cloud_msg);
-      cloud_pub_.publish(cloud_msg);
+        // Get cameras info
+        sensor_msgs::CameraInfo linfo, rinfo;
+        ensenso_ptr_->getCameraInfo("Left", linfo);
+        ensenso_ptr_->getCameraInfo("Right", rinfo);
+        linfo.header.frame_id = camera_frame_id_;
+        rinfo.header.frame_id = camera_frame_id_;
+        // Images
+        l_raw_pub_.publish(*toImageMsg(rawimages->first), linfo, ros::Time::now());
+        r_raw_pub_.publish(*toImageMsg(rawimages->second), rinfo, ros::Time::now());
+        l_rectified_pub_.publish(toImageMsg(rectifiedimages->first));
+        r_rectified_pub_.publish(toImageMsg(rectifiedimages->second));
+        // Camera_info
+        linfo_pub_.publish(linfo);
+        rinfo_pub_.publish(rinfo);
+        // Point cloud
+        cloud->header.frame_id = camera_frame_id_;
+        sensor_msgs::PointCloud2 cloud_msg;
+        pcl::toROSMsg(*cloud, cloud_msg);
+        cloud_pub_.publish(cloud_msg);
     }
-    
+
     sensor_msgs::ImagePtr toImageMsg(pcl::PCLImage pcl_image)
     {
       unsigned char *image_array = reinterpret_cast<unsigned char *>(&pcl_image.data[0]);
@@ -376,9 +397,9 @@ class EnsensoDriver
 
 int main(int argc, char **argv)
 {
-  ros::init (argc, argv, "ensenso_driver");
-  EnsensoDriver driver;
-  ros::spin();
-  ros::shutdown();
-  return 0;
+    ros::init (argc, argv, "ensenso_driver");
+    EnsensoDriver driver;
+    ros::spin();
+    ros::shutdown();
+    return 0;
 }
