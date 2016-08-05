@@ -61,6 +61,7 @@ bool pcl::EnsensoGrabber::calibrateHandEye (const std::vector<Eigen::Affine3d, E
                                             const Eigen::Affine3d &pattern_seed,
                                             const std::string setup,
                                             Eigen::Affine3d &estimated_camera_pose,
+                                            Eigen::Affine3d &estimated_pattern_pose,
                                             int &iterations,
                                             double &reprojection_error) const
 {
@@ -110,7 +111,7 @@ bool pcl::EnsensoGrabber::calibrateHandEye (const std::vector<Eigen::Affine3d, E
     matrixToJson(pattern_seed, json_pattern_seed);
     PCL_DEBUG("pattern_seed:\n %s\n", json_pattern_seed.c_str());
     // Populate command parameters
-    // It's very important populate the parameters in alphabetical order and at the same time!
+    // It's very important to write the parameters in alphabetical order and at the same time!
     calibrate.parameters ()[itmLink].setJson(json_camera_seed, false);
     calibrate.parameters ()[itmPatternPose].setJson(json_pattern_seed, false);
     calibrate.parameters ()[itmSetup] = setup;
@@ -121,23 +122,18 @@ bool pcl::EnsensoGrabber::calibrateHandEye (const std::vector<Eigen::Affine3d, E
     calibrate.execute ();  // It might take some minutes
     if (calibrate.successful())
     {
+      // It's very important to read the parameters in alphabetical order and at the same time!
       iterations = calibrate.result()[itmIterations].asInt();
-      std::string json_pose = calibrate.result()[itmLink].asJson (true);
+      std::string json_camera_pose = calibrate.result()[itmLink].asJson (true);
+      std::string json_pattern_pose = calibrate.result()[itmPatternPose].asJson (true);
       reprojection_error = calibrate.result()[itmReprojectionError].asDouble();
-      PCL_INFO("Result:\n %s\n", json_pose.c_str());
       // Estimated camera pose
-      jsonToMatrix(json_pose, estimated_camera_pose);
+      jsonToMatrix(json_camera_pose, estimated_camera_pose);
       estimated_camera_pose.translation () /= 1000.0; // millimeters -> meters
-      //~ try
-      //~ {
-        //~ // Other output parameters
-        //~ // FIXME: Even if succeeded, sometimes we cannot access Iterations and Reprojection error
-        //~ iterations = calibrate.result()[itmIterations].asInt();
-        //~ reprojection_error = calibrate.result()[itmReprojectionError].asDouble();
-      //~ }
-      //~ catch (...) {
-        //~ // Do nothing
-      //~ }
+      // Estimated pattern pose
+      jsonToMatrix(json_pattern_pose, estimated_pattern_pose);
+      estimated_pattern_pose.translation () /= 1000.0; // millimeters -> meters
+      PCL_DEBUG("Result:\n %s\n", json_camera_pose.c_str());
       return (true);
     }
     else

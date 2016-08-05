@@ -117,16 +117,18 @@ class EnsensoDriver
         robot_eigen_list.push_back(pose);
       }
       // Calibrate
-      Eigen::Affine3d camera_seed, pattern_seed, estimated_camera_pose;
+      Eigen::Affine3d camera_seed, pattern_seed, estimated_camera_pose, estimated_pattern_pose;
       tf::poseMsgToEigen(req.camera_seed, camera_seed);
       tf::poseMsgToEigen(req.pattern_seed, pattern_seed);
       ROS_INFO("calibrateHandEye: It may take up to 5 minutes...");
       res.success = ensenso_ptr_->calibrateHandEye(robot_eigen_list, camera_seed, pattern_seed, 
-                      req.setup, estimated_camera_pose, res.iterations, res.reprojection_error);
+                      req.setup, estimated_camera_pose, estimated_pattern_pose, res.iterations, 
+                      res.reprojection_error);
       if (res.success)
       {
         ROS_INFO("Calibration computation finished");
         tf::poseEigenToMsg(estimated_camera_pose, res.estimated_camera_pose);
+        tf::poseEigenToMsg(estimated_pattern_pose, res.estimated_pattern_pose);
       }
       if (was_running)
         ensenso_ptr_->start();

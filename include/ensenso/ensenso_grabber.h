@@ -57,12 +57,19 @@ public:
     * The calibration routine currently supports two types of setups: either your camera is fixed with 
     * respect to the robot origin, or your camera mounted on the robot hand and is moving with the robot.
     * @param[in] robot_poses A list of robot poses, 1 for each pattern acquired (in the same order)
-    * @param[in] camera_seed TODO
-    * @param[in] pattern_seed TODO
+    * @param[in] camera_seed Initial guess of the camera pose. The pose must be given relative to the 
+    * robot hand (for a moving camera setup), or relative to the robot origin (for the fixed camera setup).
+    * @param[in] pattern_seed Initial guess of the pattern pose. This pose must be given relative to the 
+    * robot hand (for a fixed camera setup), or relative to the robot origin (for the moving camera setup).
     * @param[in] setup Moving or Fixed, please refer to the Ensenso documentation
-    * @param[out] estimated_camera_pose TODO
-    * @param[out] iterations TODO
-    * @param[out] reprojection_error TODO
+    * @param[out] estimated_camera_pose The Transformation between this camera's left eye coordinates and 
+    * the next linked system.
+    * @param[out] estimated_pattern_pose The estimated pattern pose. This pose is either relative to the 
+    * robot hand (for a fixed camera setup), or relative to the robot origin (for the moving camera setup).
+    * @param[out] iterations Indicates the number of optimization iterations performed on the final solution 
+    * until it had converged.
+    * @param[out] reprojection_error The reprojection error per pattern point over all collected patterns of 
+    * the final solution.
     * @return True if successful, false otherwise
     * @warning This can take up to 120 seconds */
     bool calibrateHandEye ( const std::vector<Eigen::Affine3d, Eigen::aligned_allocator<Eigen::Affine3d> > &robot_poses,
@@ -70,6 +77,7 @@ public:
                             const Eigen::Affine3d &pattern_seed,
                             const std::string setup,
                             Eigen::Affine3d &estimated_camera_pose,
+                            Eigen::Affine3d &estimated_pattern_pose,
                             int &iterations,
                             double &reprojection_error) const;
     
