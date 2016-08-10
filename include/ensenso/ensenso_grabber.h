@@ -333,62 +333,62 @@ public:
     
     /** @brief The penalty for changes of +/- 1 disparity along an optimization path.
        Setting a larger value for DepthChangeCost will result in smoother surfaces, but some details might get lost when setting this value too large.
-     * @param[in] A positive integer specifying the cost of disparity changes in the disparity map.
+     * @param[in] changecost A positive integer specifying the cost of disparity changes in the disparity map.
      * @note his value must be smaller than DepthStepCost. Default Value 5
      */
     bool setDepthChangeCost(const int changecost) const;
 
     /** @brief The penalty for steps (changes of more than one disparity) along an optimization path.
        Setting a larger value for DepthStepCost will yield better detection of planar surfaces in low contrast areas, but too large values will lead to a loss of geometry details and precise object boundaries.
-     * @param[in] A positive integer, strictly larger than DepthChangeCost, specifying the cost of disparity steps (discontinuities) in the disparity map.
+     * @param[in] stepcost A positive integer, strictly larger than DepthChangeCost, specifying the cost of disparity steps (discontinuities) in the disparity map.
      * @note This value must be larger than DepthChangeCost. Default Value 30
      * @return True if successful, false otherwise
      */
     bool setDepthStepCost(const int stepcost) const;
 
     /** @brief The disparity map is checked for occluded pixels. This is usually called 'left-right consistency check'. A pixel is only accepted if it is a mutually best match with the assigned right image pixel. Due to subpixel interpolation and half-occluded pixels, it is reasonable to allow small deviations from 'exact mutual' matches. This threshold sets the allowed range of mismatch in pixels.
-     * @param[in] An integer specifying the threshold in disparities by which a pixel might be occluded by another pixel to still be accepted as valid. Negative values disable the occlusion detection and will leave wrongly associated regions in occluded image areas.
+     * @param[in] shadowingthreshold An integer specifying the threshold in disparities by which a pixel might be occluded by another pixel to still be accepted as valid. Negative values disable the occlusion detection and will leave wrongly associated regions in occluded image areas.
      * @note Setting a negative value (e.g. -1) for this parameter will disable filtering of shadowed areas. This will leave arbitrary depth values in shadowed areas. Default Value 1
      * @return True if successful, false otherwise
      */
     bool setShadowingThreshold(const int shadowingthreshold) const;
 
     /** @brief Filters the pixels depending on the uniqueness of the found correspondence. The value indicates the percentage, by which the cost of the next best correspondence must be larger (compared to the best correspondence), such that the pixel is accepted.
-     * @param[in] An integer specifying the uniqueness margin in percent.
+     * @param[in] ratio An integer specifying the uniqueness margin in percent.
      * @note  Setting this parameter to 0 disables the uniqueness filter.
      * @return True if successful, false otherwise
      */
     bool setUniquenessRatio(const int ratio) const;
 
     /** @brief Specifies the size of the median filter as radius in pixels, excluding the center pixel. The filter is applied to the disparity map. Median filtering will reduce noise inside surfaces while maintaining sharp edges, but object corners will be rounded.
-     * @param[in] An integer specifying half the median filter window size in pixels, excluding the center pixel. Allowed values are 0 to 2.
+     * @param[in] radius An integer specifying half the median filter window size in pixels, excluding the center pixel. Allowed values are 0 to 2.
      * @note Setting the filter radius to 0 will disable median filtering.
      * @return True if successful, false otherwise
      */
     bool setMedianFilterRadius(const int radius) const;
 
     /** @brief Defines how the image is divided into regions for speckle filtering. Whenever two neighboring pixel disparities differ by more than ComponentThreshold disparities, the two pixels are considered as belonging to separate regions. Consequently, each resulting region will not have discontinuities larger or equal to ComponentThreshold in it's disparity map area.
-     * @param[in] An integer specifying the disparity step size, where surfaces should be cut into separate speckle regions.
+     * @param[in] threshold An integer specifying the disparity step size, where surfaces should be cut into separate speckle regions.
      * @note  The smaller this threshold is set, the smaller the resulting disparity regions will be. Thus setting a smaller ComponentThreshold will result in more regions being filtered out, because some regions fall apart and their sizes drop below RegionSize.
      * @return True if successful, false otherwise
      */
     bool setSpeckleComponentThreshold(const int threshold) const;
 
     /** @brief The size in pixels of a disparity map region below which the region will be removed from the disparity map. The computation of the regions is controlled by ComponentThreshold.
-     * @param[in] An integer specifying the size in pixels below which a region will be removed from the disparity map.
+     * @param[in] threshold An integer specifying the size in pixels below which a region will be removed from the disparity map.
      * @note  Setting this parameter to 0 disables the speckle filter.
      * @return True if successful, false otherwise
      */
     bool setSpeckleRegionSize(const int threshold) const;
 
     /** @brief Defines which missing regions will be filled by setting a threshold on the maximum spread of the disparities on the region boundary. Setting this value reasonably small will ensure that only missing patches inside planar faces will be filled whereas gaps at depth discontinuities are kept unfilled.
-     * @param[in] An integer specifying the maximum spread of the disparities at the fill region border.
+     * @param[in] maximumspread An integer specifying the maximum spread of the disparities at the fill region border.
      * @return True if successful, false otherwise
      */
     bool setFillBorderSpread(const int maximumspread) const;
 
     /** @brief Defines an upper limit on the region size in pixels, up to which a region is accepted for filling. The region must also satisfy the BorderSpread condition to be filled.
-     * @param[in] An integer specifying region size in pixels, up to which a missing region is being filled.
+     * @param[in] regionsize An integer specifying region size in pixels, up to which a missing region is being filled.
      * @note Setting this parameter to 0 disables the hole filling filter.
      * @return True if successful, false otherwise
      */
