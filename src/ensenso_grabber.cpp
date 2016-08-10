@@ -1039,6 +1039,150 @@ if (!device_open_)
   return (true);
 }
 
+bool pcl::EnsensoGrabber::setDepthChangeCost(const int changecost) const
+{
+  if (!device_open_)
+    return (false);
+  try
+  {
+    camera_[itmParameters][itmDisparityMap][itmStereoMatching][itmDepthChangeCost].set (changecost);
+  }
+  catch (NxLibException &ex)
+  {
+    ensensoExceptionHandling (ex, "setDepthChangeCost");
+    return (false);
+  }
+  return (true);
+}
+
+bool pcl::EnsensoGrabber::setDepthStepCost(const int stepcost) const
+{
+  if (!device_open_)
+    return (false);
+  try
+  {
+    camera_[itmParameters][itmDisparityMap][itmStereoMatching][itmDepthStepCost].set (stepcost);
+  }
+  catch (NxLibException &ex)
+  {
+    ensensoExceptionHandling (ex, "setDepthStepCost");
+    return (false);
+  }
+  return (true);
+}
+
+bool pcl::EnsensoGrabber::setShadowingThreshold(const int shadowingthreshold) const
+{
+  if (!device_open_)
+    return (false);
+  try
+  {
+    camera_[itmParameters][itmDisparityMap][itmStereoMatching][itmShadowingThreshold].set (shadowingthreshold);
+  }
+  catch (NxLibException &ex)
+  {
+    ensensoExceptionHandling (ex, "setShadowingThreshold");
+    return (false);
+  }
+  return (true);
+}
+
+bool pcl::EnsensoGrabber::setUniquenessRatio(const int ratio) const
+{
+  if (!device_open_)
+    return (false);
+  try
+  {
+    camera_[itmParameters][itmDisparityMap][itmPostProcessing][itmUniquenessRatio].set (ratio);
+  }
+  catch (NxLibException &ex)
+  {
+    ensensoExceptionHandling (ex, "setUniquenessRatio");
+    return (false);
+  }
+  return (true);
+}
+
+bool pcl::EnsensoGrabber::setMedianFilterRadius(const int radius) const
+{
+  if (!device_open_)
+    return (false);
+  try
+  {
+    camera_[itmParameters][itmDisparityMap][itmPostProcessing][itmMedianFilterRadius].set (radius);
+  }
+  catch (NxLibException &ex)
+  {
+    ensensoExceptionHandling (ex, "setMedianFilterRadius");
+    return (false);
+  }
+  return (true);
+}
+
+bool pcl::EnsensoGrabber::setSpeckleComponentThreshold(const int threshold) const
+{
+  if (!device_open_)
+    return (false);
+  try
+  {
+    camera_[itmParameters][itmDisparityMap][itmPostProcessing][itmSpeckleRemoval][itmComponentThreshold].set (threshold);
+  }
+  catch (NxLibException &ex)
+  {
+    ensensoExceptionHandling (ex, "setComponentThreshold");
+    return (false);
+  }
+  return (true);
+}
+
+bool pcl::EnsensoGrabber::setSpeckleRegionSize(const int regionsize) const
+{
+  if (!device_open_)
+    return (false);
+  try
+  {
+    camera_[itmParameters][itmDisparityMap][itmPostProcessing][itmSpeckleRemoval][itmRegionSize].set (regionsize);
+  }
+  catch (NxLibException &ex)
+  {
+    ensensoExceptionHandling (ex, "setRegionSize");
+    return (false);
+  }
+  return (true);
+}
+
+bool pcl::EnsensoGrabber::setFillBorderSpread(const int maximumspread) const
+{
+  if (!device_open_)
+    return (false);
+  try
+  {
+    camera_[itmParameters][itmDisparityMap][itmPostProcessing][itmFilling][itmBorderSpread].set (maximumspread);
+  }
+  catch (NxLibException &ex)
+  {
+    ensensoExceptionHandling (ex, "setBorderSpread");
+    return (false);
+  }
+  return (true);
+}
+
+bool pcl::EnsensoGrabber::setFillRegionSize(const int regionsize) const
+{
+  if (!device_open_)
+    return (false);
+  try
+  {
+    camera_[itmParameters][itmDisparityMap][itmPostProcessing][itmFilling][itmRegionSize].set (regionsize);
+  }
+  catch (NxLibException &ex)
+  {
+    ensensoExceptionHandling (ex, "setRegionSize");
+    return (false);
+  }
+  return (true);
+}
+
 void pcl::EnsensoGrabber::start ()
 {
   if (isRunning ())

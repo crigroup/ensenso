@@ -192,6 +192,17 @@ class EnsensoDriver
       ROS_DEBUG_STREAM("NumberOfDisparities: "  << config.groups.stereo.NumberOfDisparities);
       ROS_DEBUG_STREAM("OptimizationProfile: "  << profile);
       ROS_DEBUG_STREAM("Scaling: "              << config.groups.stereo.Scaling);
+      ROS_DEBUG("Advanced Matching Parameters");
+      ROS_DEBUG_STREAM("DepthChangeCost: " << config.groups.stereo.DepthChangeCost);
+      ROS_DEBUG_STREAM("DepthStepCost: " << config.groups.stereo.DepthStepCost);
+      ROS_DEBUG_STREAM("ShadowingThreshold: " << config.groups.stereo.ShadowingThreshold);
+      ROS_DEBUG("Postprocessing Parameters");
+      ROS_DEBUG_STREAM("UniquenessRatio: " << config.groups.postproc.UniquenessRatio);
+      ROS_DEBUG_STREAM("MedianFilterRadius: "<< config.groups.postproc.MedianFilterRadius);
+      ROS_DEBUG_STREAM("SpeckleComponentThreshold: "<< config.groups.postproc.SpeckleComponentThreshold);
+      ROS_DEBUG_STREAM("SpeckleRegionSize: "<< config.groups.postproc.SpeckleRegionSize);
+      ROS_DEBUG_STREAM("FillBorderSpread: "<< config.groups.postproc.FillBorderSpread);
+      ROS_DEBUG_STREAM("FillRegionSize: " << config.groups.postproc.FillRegionSize);
       ROS_DEBUG("Stream Parameters");
       ROS_DEBUG_STREAM("Cloud: "   << std::boolalpha << config.groups.stream.Cloud);
       ROS_DEBUG_STREAM("Images: "   << std::boolalpha << config.groups.stream.Images);
@@ -223,6 +234,16 @@ class EnsensoDriver
       ensenso_ptr_->setNumberOfDisparities(config.groups.stereo.NumberOfDisparities);
       ensenso_ptr_->setOptimizationProfile(profile);
       ensenso_ptr_->setScaling(config.groups.stereo.Scaling);
+      ensenso_ptr_->setDepthChangeCost(config.groups.stereo.DepthChangeCost);
+      ensenso_ptr_->setDepthStepCost(config.groups.stereo.DepthStepCost);
+      ensenso_ptr_->setShadowingThreshold(config.groups.stereo.ShadowingThreshold);
+      //Postprocessing parameters
+      ensenso_ptr_->setUniquenessRatio(config.groups.postproc.UniquenessRatio);
+      ensenso_ptr_->setMedianFilterRadius(config.groups.postproc.MedianFilterRadius);
+      ensenso_ptr_->setSpeckleComponentThreshold(config.groups.postproc.SpeckleComponentThreshold);
+      ensenso_ptr_->setSpeckleRegionSize(config.groups.postproc.SpeckleRegionSize);
+      ensenso_ptr_->setFillBorderSpread(config.groups.postproc.FillBorderSpread);
+      ensenso_ptr_->setFillRegionSize(config.groups.postproc.FillRegionSize);
       // Streaming parameters
       configureStreaming(config.groups.stream.Cloud, config.groups.stream.Images);
     }
