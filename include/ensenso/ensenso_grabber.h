@@ -109,7 +109,7 @@ public:
      * multiple images of the same pattern in the same pose.
      * @return true if successful, false otherwise
      * @warning A device must be opened and must not be running.
-     * @note At least one calibration pattern must have been collected before, use @ref collectPattern before */
+     * @note At least one calibration pattern must have been collected before, use \ref collectPattern() before */
     bool estimatePatternPose (Eigen::Affine3d &pose, const bool average=false) const;
     
     /** @brief Clears the pattern buffers of monocular and stereo pattern observations. 
@@ -132,6 +132,12 @@ public:
      * @note See: [sensor_msgs/CameraInfo](http://docs.ros.org/api/sensor_msgs/html/msg/CameraInfo.html)
      */
     bool getCameraInfo(std::string cam, sensor_msgs::CameraInfo &cam_info) const;
+    
+    /** @brief TODO: Document getLastStereoPattern() 
+     * @return True if successful, false otherwise */
+    bool getLastStereoPattern ( std::vector<int> &grid_size, double &grid_spacing,
+                                std::vector<Eigen::Vector2d> &left_points,
+                                std::vector<Eigen::Vector2d> &right_points) const;
     
     /** @brief Obtain the number of frames per second (FPS) */
     float getFramesPerSecond () const;
@@ -163,6 +169,9 @@ public:
      * @param[in] port The port number
      * @return True if successful, false otherwise */
     bool openTcpPort (const int port = 24000);
+    
+    /** @brief TODO: Document readStereoPatternAtGrabbing*/
+    void readStereoPatternAtGrabbing (const bool enable);
     
     /** @brief Restores the default capture configuration parameters.
      * @return True if successful, false otherwise */
@@ -425,6 +434,15 @@ protected:
     
     /** @brief Whether an TCP port is opened or not */
     bool tcp_open_;
+    
+    /** @brief Pose of the last pattern detected during \ref processGrabbing() */
+    std::string last_stereo_pattern_;
+    
+    /** @brief Whether to read the pattern pose at \ref processGrabbing() or not */
+    bool read_stereo_pattern_;
+    
+    /** @brief Mutual exclusion for reading pattern pose */
+    mutable boost::mutex pattern_mutex_;
     
     /** @brief Whether an Ensenso device is running or not */
     bool running_;
