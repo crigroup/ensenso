@@ -1,0 +1,9 @@
+- builder: epydoc
+  name: Python API
+  output_dir: python
+  homepage: https://github.com/crigroup/ensenso
+- builder: doxygen
+  name: C++ API
+  output_dir: cpp
+  file_patterns: '*.c *.cpp *.h *.cc *.hh *.dox'
+  homepage: https://github.com/crigroup/ensenso
