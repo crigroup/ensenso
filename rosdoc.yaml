@@ -1,7 +1,5 @@
 - builder: epydoc
-  name: Python API
-  output_dir: python
-  homepage: https://github.com/crigroup/ensenso
+  config: epydoc.config
 - builder: doxygen
   name: C++ API
   output_dir: cpp
