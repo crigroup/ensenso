@@ -376,13 +376,13 @@ class EnsensoDriver
       rinfo.header.frame_id = camera_frame_id_;
       // Images
       if (l_raw_pub_.getNumSubscribers() > 0)
-        l_raw_pub_.publish(*toImageMsg(rawimages->first), linfo, now);
+        l_raw_pub_.publish(*toImageMsg(rawimages->first, now), linfo, now);
       if (r_raw_pub_.getNumSubscribers() > 0)
-        r_raw_pub_.publish(*toImageMsg(rawimages->second), rinfo, now);
+        r_raw_pub_.publish(*toImageMsg(rawimages->second, now), rinfo, now);
       if (l_rectified_pub_.getNumSubscribers() > 0)
-        l_rectified_pub_.publish(toImageMsg(rectifiedimages->first));
+        l_rectified_pub_.publish(toImageMsg(rectifiedimages->first, now));
       if (r_rectified_pub_.getNumSubscribers() > 0)
-        r_rectified_pub_.publish(toImageMsg(rectifiedimages->second));
+        r_rectified_pub_.publish(toImageMsg(rectifiedimages->second, now));
       // Publish calibration pattern info (if any)
       publishCalibrationPattern(now);
     }
@@ -401,13 +401,13 @@ class EnsensoDriver
       rinfo.header.frame_id = camera_frame_id_;
       // Images
       if (l_raw_pub_.getNumSubscribers() > 0)
-        l_raw_pub_.publish(*toImageMsg(rawimages->first), linfo, now);
+        l_raw_pub_.publish(*toImageMsg(rawimages->first, now), linfo, now);
       if (r_raw_pub_.getNumSubscribers() > 0)
-        r_raw_pub_.publish(*toImageMsg(rawimages->second), rinfo, now);
+        r_raw_pub_.publish(*toImageMsg(rawimages->second, now), rinfo, now);
       if (l_rectified_pub_.getNumSubscribers() > 0)
-        l_rectified_pub_.publish(toImageMsg(rectifiedimages->first));
+        l_rectified_pub_.publish(toImageMsg(rectifiedimages->first, now));
       if (r_rectified_pub_.getNumSubscribers() > 0)
-        r_rectified_pub_.publish(toImageMsg(rectifiedimages->second));
+        r_rectified_pub_.publish(toImageMsg(rectifiedimages->second, now));
       // Publish calibration pattern info (if any)
       publishCalibrationPattern(now);
       // Camera_info
@@ -472,7 +472,7 @@ class EnsensoDriver
       }
     }
     
-    sensor_msgs::ImagePtr toImageMsg(pcl::PCLImage pcl_image)
+    sensor_msgs::ImagePtr toImageMsg(pcl::PCLImage pcl_image, const ros::Time &now)
     {
       unsigned char *image_array = reinterpret_cast<unsigned char *>(&pcl_image.data[0]);
       int type(CV_8UC1);
@@ -484,8 +484,8 @@ class EnsensoDriver
       }
       cv::Mat image_mat(pcl_image.height, pcl_image.width, type, image_array);
       std_msgs::Header header;
-      header.frame_id = "world";
-      header.stamp = ros::Time::now();
+      header.frame_id = camera_frame_id_;
+      header.stamp = now;
       return cv_bridge::CvImage(header, encoding, image_mat).toImageMsg();
     }
 };

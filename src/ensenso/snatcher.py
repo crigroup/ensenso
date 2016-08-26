@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 import os
+import copy
 import rospy
 import numpy as np
 import dynamic_reconfigure.client
@@ -56,10 +57,8 @@ class Snatcher(object):
     @type  msg: sensor_msgs/PointCloud2
     @param msg: The C{PointCloud2} message.
     """
-    try:
-      self.point_cloud = msg
-    except:
-      self.point_cloud = None
+    self.point_cloud = msg
+    self.headers['point_cloud'] = copy.deepcopy(msg.header)
   
   def cb_raw_left(self, msg):
     """
@@ -69,6 +68,7 @@ class Snatcher(object):
     """
     try:
       self.raw_left = self.bridge.imgmsg_to_cv2(msg, 'mono8')
+      self.headers['raw_left'] = copy.deepcopy(msg.header)
     except:
       rospy.logdebug('Failed to process left image')
       self.raw_left = None
@@ -81,6 +81,7 @@ class Snatcher(object):
     """
     try:
       self.raw_right = self.bridge.imgmsg_to_cv2(msg, 'mono8')
+      self.headers['raw_right'] = copy.deepcopy(msg.header)
     except:
       rospy.logdebug('Failed to process right image')
       self.raw_right = None
@@ -93,6 +94,7 @@ class Snatcher(object):
     """
     try:
       self.rect_left = self.bridge.imgmsg_to_cv2(msg, 'mono8')
+      self.headers['rect_left'] = copy.deepcopy(msg.header)
     except:
       rospy.logdebug('Failed to process left image')
       self.rect_left = None
@@ -105,6 +107,7 @@ class Snatcher(object):
     """
     try:
       self.rect_right = self.bridge.imgmsg_to_cv2(msg, 'mono8')
+      self.headers['rect_right'] = copy.deepcopy(msg.header)
     except:
       rospy.logdebug('Failed to process right image')
       self.rect_right = None
@@ -165,6 +168,7 @@ class Snatcher(object):
     """
     Resets the snatched information
     """
+    self.headers = dict()
     self.point_cloud = None
     self.raw_left = None
     self.raw_right = None
