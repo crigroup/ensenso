@@ -16,8 +16,10 @@ void ensensoExceptionHandling (const NxLibException &ex,
 
 pcl::EnsensoGrabber::EnsensoGrabber () :
   device_open_ (false),
-  tcp_open_ (false),
-  running_ (false)
+  last_stereo_pattern_(""),
+  store_calibration_pattern_ (false),
+  running_ (false),
+  tcp_open_ (false)
 {
   point_cloud_signal_ = createSignal<sig_cb_ensenso_point_cloud> ();
   images_signal_ = createSignal<sig_cb_ensenso_images> ();
@@ -204,28 +206,28 @@ int pcl::EnsensoGrabber::collectPattern (const bool buffer) const
 
 double pcl::EnsensoGrabber::decodePattern () const
 {
+  double grid_spacing = -1.0;
   if (!device_open_ || running_)
-    return (-1);
-  NxLibCommand collect_pattern (cmdCollectPattern);
+    return (-1.0);
   try
   {
     NxLibCommand (cmdCapture).execute ();
+    NxLibCommand collect_pattern (cmdCollectPattern);
     collect_pattern.parameters ()[itmBuffer].set (false);
     collect_pattern.parameters ()[itmDecodeData].set (true);
     collect_pattern.execute ();
+    grid_spacing = collect_pattern.result()[itmGridSpacing].asDouble();
   }
   catch (NxLibException &ex)
   {
     ensensoExceptionHandling (ex, "decodePattern");
-    return (-1);
+    return (-1.0);
   }
-  return collect_pattern.result()[itmGridSpacing].asDouble();
+  return grid_spacing;
 }
 
 bool pcl::EnsensoGrabber::discardPatterns () const
 {
-  if (!device_open_ || running_)
-    return (false);
   try
   {
     NxLibCommand (cmdDiscardPatterns).execute ();
@@ -240,8 +242,6 @@ bool pcl::EnsensoGrabber::discardPatterns () const
 
 bool pcl::EnsensoGrabber::estimatePatternPose (Eigen::Affine3d &pose, const bool average) const
 {
-  if (!device_open_ || running_)
-    return (false);
   try
   {
     NxLibCommand estimate_pattern_pose (cmdEstimatePatternPose);
@@ -328,6 +328,42 @@ bool pcl::EnsensoGrabber::getCameraInfo(std::string cam, sensor_msgs::CameraInfo
     ensensoExceptionHandling (ex, "getCameraInfo");
     return false;
   }
+}
+
+bool pcl::EnsensoGrabber::getLastCalibrationPattern ( std::vector<int> &grid_size, double &grid_spacing,
+                                                      std::vector<Eigen::Vector2d> &left_points,
+                                                      std::vector<Eigen::Vector2d> &right_points,
+                                                      Eigen::Affine3d &pose) const
+{
+  // Lock
+  pattern_mutex_.lock ();
+  std::string stereo_pattern_json = last_stereo_pattern_;
+  pose = last_pattern_pose_;
+  pattern_mutex_.unlock ();
+  // Process
+  if ( stereo_pattern_json.empty() )
+    return false;
+  // Use NxLib JSON API to extract the Raw Stereo Pattern information
+  NxLibItem stereo_pattern ("/tmpStereoPattern");
+  stereo_pattern.setJson(stereo_pattern_json);
+  // Get pattern details
+  grid_size.resize(2);
+  grid_size[0] = stereo_pattern[itmPattern][itmGridSize][0].asInt();
+  grid_size[1] = stereo_pattern[itmPattern][itmGridSize][1].asInt();
+  grid_spacing = stereo_pattern[itmPattern][itmGridSpacing].asDouble();
+  int rows = grid_size[0];
+  int cols = grid_size[1];
+  left_points.resize(rows*cols);
+  right_points.resize(rows*cols);
+  for (uint i = 0; i < left_points.size(); ++i)
+  {
+    left_points[i][0] = stereo_pattern[itmPoints][0][i][0].asDouble();
+    left_points[i][1] = stereo_pattern[itmPoints][0][i][1].asDouble();
+    right_points[i][0] = stereo_pattern[itmPoints][1][i][0].asDouble();
+    right_points[i][1] = stereo_pattern[itmPoints][1][i][1].asDouble();
+  }
+  stereo_pattern.erase();
+  return true;
 }
 
 float pcl::EnsensoGrabber::getFramesPerSecond () const
@@ -550,18 +586,37 @@ void pcl::EnsensoGrabber::processGrabbing ()
         camera_[itmImages][itmRaw][itmLeft].getBinaryDataInfo (0, 0, 0, 0, 0, &timestamp);
 
         // Gather images
+        pattern_mutex_.lock ();
+        last_stereo_pattern_ = std::string("");
+        pattern_mutex_.unlock ();
         if (num_slots<sig_cb_ensenso_images> () > 0 || num_slots<sig_cb_ensenso_point_cloud_images> () > 0)
         {
           // Rectify images
           NxLibCommand (cmdRectifyImages).execute ();
           int width, height, channels, bpe;
           bool isFlt, collected_pattern = false;
-          
-          try  // Try to collect calibration pattern, if not possible, publish RAW images and Rectified images instead
+          // Try to collect calibration pattern and overlay it to the raw image
+          // If store_calibration_pattern_ is true, it estimates the pattern pose and store it at last_stereo_pattern_
+          if (store_calibration_pattern_)
+            discardPatterns();
+          try
           {
             NxLibCommand collect_pattern (cmdCollectPattern);
-            collect_pattern.parameters ()[itmBuffer].set (false);  // Do NOT store the pattern into the buffer!
+            collect_pattern.parameters ()[itmBuffer].set (store_calibration_pattern_);
+            collect_pattern.parameters ()[itmDecodeData].set (true);
             collect_pattern.execute ();
+            if (store_calibration_pattern_)
+            {
+              // estimatePatternPose() takes ages, so, we use the raw data
+              // Raw stereo pattern info
+              NxLibCommand get_pattern_buffers (cmdGetPatternBuffers);
+              get_pattern_buffers.execute ();
+              pattern_mutex_.lock ();
+              last_stereo_pattern_ = get_pattern_buffers.result()[itmStereo][0].asJson (true);
+              // Pattern pose
+              estimatePatternPose (last_pattern_pose_, false);
+              pattern_mutex_.unlock ();
+            }
             collected_pattern = true;
           }
           catch (const NxLibException &ex)
@@ -654,6 +709,13 @@ void pcl::EnsensoGrabber::processGrabbing ()
       ensensoExceptionHandling (ex, "processGrabbing");
     }
   }
+}
+
+void pcl::EnsensoGrabber::storeCalibrationPattern (const bool enable)
+{
+  store_calibration_pattern_ = enable;
+  if (enable)
+    PCL_WARN ("Storing calibration pattern. This will clean the pattern buffer continuously\n");
 }
 
 bool pcl::EnsensoGrabber::restoreDefaultConfiguration () const

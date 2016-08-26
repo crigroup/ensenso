@@ -22,6 +22,11 @@ find_package(PCL REQUIRED)
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "/opt/ensenso/cmake")
 find_package(Ensenso REQUIRED)
 
+add_message_files(
+  FILES
+  RawStereoPattern.msg
+)
+
 add_service_files(
   FILES
   CalibrateHandEye.srv

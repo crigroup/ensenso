@@ -10,8 +10,9 @@
   
   <!-- Ensenso driver -->
   <node name="ensenso_driver" pkg="ensenso" type="ensenso_driver" ns="camera" output="screen"> 
-    <param name="serial"          type="string" value="$(arg serial)" />
-    <param name="camera_frame_id" type="string" value="ensenso_optical_frame" />
+    <param name="stream_calib_pattern"  type="bool"   value="False" />
+    <param name="serial"                type="string" value="$(arg serial)" />
+    <param name="camera_frame_id"       type="string" value="camera_optical_frame" />
   </node>
   
   <!-- Driver configuration -->
