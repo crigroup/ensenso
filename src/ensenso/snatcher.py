@@ -24,15 +24,18 @@ class Snatcher(object):
   topics and connects to the dynamic reconfiguration server to start/stop streaming and
   to switch on/off the projector and frontlight.
   """
-  def __init__(self):
+  def __init__(self, use_cv_types=True):
     """
     Snatcher constructor. It subscribes to the following topics:
       - Raw images: C{left/image_raw} and C{left/image_raw} of type C{sensor_msgs/Image}
       - Rectified images: C{left/image_rect} and C{left/image_rect} of type C{sensor_msgs/Image}
       - Point cloud: C{depth/points} of type C{sensor_msgs/PointCloud2}
+    @type  use_cv_types: bool
+    @param use_cv_types: If true will convert image messages to valid OpenCV type.
     @note: If your B{topics are different} use ros remapping.
     """
     # Config stuff
+    self.use_cv_types = use_cv_types
     self.bridge = CvBridge()
     self.exposure_time = 1.5
     # Setup publishers and subscribers
@@ -66,12 +69,15 @@ class Snatcher(object):
     @type  msg: sensor_msgs/Image
     @param msg: The C{Image} message.
     """
-    try:
-      self.raw_left = self.bridge.imgmsg_to_cv2(msg, 'mono8')
-      self.headers['raw_left'] = copy.deepcopy(msg.header)
-    except:
-      rospy.logdebug('Failed to process left image')
-      self.raw_left = None
+    self.headers['raw_left'] = copy.deepcopy(msg.header)
+    if self.use_cv_types:
+      try:
+        self.raw_left = self.bridge.imgmsg_to_cv2(msg, 'mono8')
+      except:
+        rospy.logdebug('Failed to process raw_left image')
+        self.raw_left = None
+    else:
+      self.raw_left = msg
   
   def cb_raw_right(self, msg):
     """
@@ -79,12 +85,15 @@ class Snatcher(object):
     @type  msg: sensor_msgs/Image
     @param msg: The C{Image} message.
     """
-    try:
-      self.raw_right = self.bridge.imgmsg_to_cv2(msg, 'mono8')
-      self.headers['raw_right'] = copy.deepcopy(msg.header)
-    except:
-      rospy.logdebug('Failed to process right image')
-      self.raw_right = None
+    self.headers['raw_right'] = copy.deepcopy(msg.header)
+    if self.use_cv_types:
+      try:
+        self.raw_right = self.bridge.imgmsg_to_cv2(msg, 'mono8')
+      except:
+        rospy.logdebug('Failed to process raw_right image')
+        self.raw_right = None
+    else:
+      self.raw_right = msg
   
   def cb_rect_left(self, msg):
     """
@@ -92,12 +101,15 @@ class Snatcher(object):
     @type  msg: sensor_msgs/Image
     @param msg: The C{Image} message.
     """
-    try:
-      self.rect_left = self.bridge.imgmsg_to_cv2(msg, 'mono8')
-      self.headers['rect_left'] = copy.deepcopy(msg.header)
-    except:
-      rospy.logdebug('Failed to process left image')
-      self.rect_left = None
+    self.headers['rect_left'] = copy.deepcopy(msg.header)
+    if self.use_cv_types:
+      try:
+        self.rect_left = self.bridge.imgmsg_to_cv2(msg, 'mono8')
+      except:
+        rospy.logdebug('Failed to process rect_left image')
+        self.rect_left = None
+    else:
+      self.rect_left = msg
   
   def cb_rect_right(self, msg):
     """
@@ -105,12 +117,15 @@ class Snatcher(object):
     @type  msg: sensor_msgs/Image
     @param msg: The C{Image} message.
     """
-    try:
-      self.rect_right = self.bridge.imgmsg_to_cv2(msg, 'mono8')
-      self.headers['rect_right'] = copy.deepcopy(msg.header)
-    except:
-      rospy.logdebug('Failed to process right image')
-      self.rect_right = None
+    self.headers['rect_right'] = copy.deepcopy(msg.header)
+    if self.use_cv_types:
+      try:
+        self.rect_right = self.bridge.imgmsg_to_cv2(msg, 'mono8')
+      except:
+        rospy.logdebug('Failed to process rect_right image')
+        self.rect_right = None
+    else:
+      self.rect_right = msg
   
   def enable_lights(self, projector=False, frontlight=False):
     """
@@ -181,6 +196,7 @@ class Snatcher(object):
     @rtype: bool
     @return: True if successful, false otherwise
     """
+    exposure_time = max( 0.001, exposure_time )
     rospy.sleep(exposure_time)
     self.reset_snapshots()
     while not success_fn():

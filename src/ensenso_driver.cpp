@@ -418,8 +418,8 @@ class EnsensoDriver
       {
         cloud->header.frame_id = camera_frame_id_;
         sensor_msgs::PointCloud2 cloud_msg;
-        cloud_msg.header.stamp = now;
         pcl::toROSMsg(*cloud, cloud_msg);
+        cloud_msg.header.stamp = now;
         cloud_pub_.publish(cloud_msg);
       }
     }
