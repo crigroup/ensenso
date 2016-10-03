@@ -83,11 +83,11 @@ class EnsensoDriver
       r_raw_pub_ = it.advertiseCamera("right/image_raw", 2);
       l_rectified_pub_ = it.advertise("left/image_rect", 2);
       r_rectified_pub_ = it.advertise("right/image_rect", 2);
-      cloud_pub_ = nh_.advertise<sensor_msgs::PointCloud2 >("depth/points", 2, true); // Latched
-      linfo_pub_=nh_.advertise<sensor_msgs::CameraInfo> ("left/camera_info", 2, true);
-      rinfo_pub_=nh_.advertise<sensor_msgs::CameraInfo> ("right/camera_info", 2, true);
-      pattern_raw_pub_=nh_.advertise<ensenso::RawStereoPattern> ("pattern/stereo", 2, true);
-      pattern_pose_pub_=nh_.advertise<geometry_msgs::PoseStamped> ("pattern/pose", 2, true);
+      cloud_pub_ = nh_.advertise<sensor_msgs::PointCloud2 >("depth/points", 2, false); // Latched
+      linfo_pub_=nh_.advertise<sensor_msgs::CameraInfo> ("left/camera_info", 2, false);
+      rinfo_pub_=nh_.advertise<sensor_msgs::CameraInfo> ("right/camera_info", 2, false);
+      pattern_raw_pub_=nh_.advertise<ensenso::RawStereoPattern> ("pattern/stereo", 2, false);
+      pattern_pose_pub_=nh_.advertise<geometry_msgs::PoseStamped> ("pattern/pose", 2, false);
       // Initialize Ensenso
       ensenso_ptr_.reset(new pcl::EnsensoGrabber);
       ensenso_ptr_->openDevice(serial);
@@ -98,7 +98,7 @@ class EnsensoDriver
       f = boost::bind(&EnsensoDriver::CameraParametersCallback, this, _1, _2);
       reconfigure_server_.setCallback(f);
       // Start the camera. By default only stream images. You can use dynreconfigure to change the streaming
-      configureStreaming(false);
+      configureStreaming(false, false);
       ensenso_ptr_->start();
       // Advertise services
       calibrate_srv_ = nh_.advertiseService("calibrate_handeye", &EnsensoDriver::calibrateHandEyeCB, this);
@@ -266,7 +266,7 @@ class EnsensoDriver
       configureStreaming(config.groups.stream.Cloud, config.groups.stream.Images);
     }
     
-    bool configureStreaming(const bool cloud, const bool images=true)
+    bool configureStreaming(const bool cloud, const bool images)
     {
       if ((is_streaming_cloud_ == cloud) && (is_streaming_images_ == images))
         return true;  // Nothing to be done here

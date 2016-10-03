@@ -9,8 +9,6 @@
 #include <pcl/io/boost.h>
 #include <pcl/io/grabber.h>
 #include <pcl/common/synchronizer.h>
-// ROS
-
 // Others
 #include <boost/thread.hpp>
 #include <camera_info_manager/camera_info_manager.h>
