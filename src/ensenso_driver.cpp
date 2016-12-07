@@ -98,7 +98,7 @@ class EnsensoDriver
       f = boost::bind(&EnsensoDriver::CameraParametersCallback, this, _1, _2);
       reconfigure_server_.setCallback(f);
       // Start the camera. By default only stream images. You can use dynreconfigure to change the streaming
-      configureStreaming(false, false);
+      configureStreaming(true, false);
       ensenso_ptr_->start();
       // Advertise services
       calibrate_srv_ = nh_.advertiseService("calibrate_handeye", &EnsensoDriver::calibrateHandEyeCB, this);
