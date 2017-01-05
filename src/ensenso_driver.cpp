@@ -79,15 +79,15 @@ class EnsensoDriver
         ROS_WARN_STREAM("Parameter [~stream_calib_pattern] not found, using default: " << (stream_calib_pattern_ ? "TRUE":"FALSE"));
       // Advertise topics
       image_transport::ImageTransport it(nh_);
-      l_raw_pub_ = it.advertiseCamera("left/image_raw", 2);
-      r_raw_pub_ = it.advertiseCamera("right/image_raw", 2);
-      l_rectified_pub_ = it.advertise("left/image_rect", 2);
-      r_rectified_pub_ = it.advertise("right/image_rect", 2);
-      cloud_pub_ = nh_.advertise<sensor_msgs::PointCloud2 >("depth/points", 2, false); // Latched
-      linfo_pub_=nh_.advertise<sensor_msgs::CameraInfo> ("left/camera_info", 2, false);
-      rinfo_pub_=nh_.advertise<sensor_msgs::CameraInfo> ("right/camera_info", 2, false);
-      pattern_raw_pub_=nh_.advertise<ensenso::RawStereoPattern> ("pattern/stereo", 2, false);
-      pattern_pose_pub_=nh_.advertise<geometry_msgs::PoseStamped> ("pattern/pose", 2, false);
+      l_raw_pub_ = it.advertiseCamera("left/image_raw", 1);
+      r_raw_pub_ = it.advertiseCamera("right/image_raw", 1);
+      l_rectified_pub_ = it.advertise("left/image_rect", 1);
+      r_rectified_pub_ = it.advertise("right/image_rect", 1);
+      cloud_pub_ = nh_.advertise<sensor_msgs::PointCloud2 >("depth/points", 1, false);
+      linfo_pub_=nh_.advertise<sensor_msgs::CameraInfo> ("left/camera_info", 1, false);
+      rinfo_pub_=nh_.advertise<sensor_msgs::CameraInfo> ("right/camera_info", 1, false);
+      pattern_raw_pub_=nh_.advertise<ensenso::RawStereoPattern> ("pattern/stereo", 1, false);
+      pattern_pose_pub_=nh_.advertise<geometry_msgs::PoseStamped> ("pattern/pose", 1, false);
       // Initialize Ensenso
       ensenso_ptr_.reset(new pcl::EnsensoGrabber);
       ensenso_ptr_->openDevice(serial);
