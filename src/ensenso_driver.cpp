@@ -222,8 +222,8 @@ class EnsensoDriver
       ROS_DEBUG_STREAM("FillBorderSpread: "<< config.groups.postproc.FillBorderSpread);
       ROS_DEBUG_STREAM("FillRegionSize: " << config.groups.postproc.FillRegionSize);
       ROS_DEBUG("Stream Parameters");
-      ROS_DEBUG_STREAM("Cloud: "   << std::boolalpha << config.groups.stream.Cloud);
-      ROS_DEBUG_STREAM("Images: "   << std::boolalpha << config.groups.stream.Images);
+      ROS_DEBUG_STREAM("Cloud: "   << std::boolalpha << config.groups.activate.Cloud);
+      ROS_DEBUG_STREAM("Images: "   << std::boolalpha << config.groups.activate.Images);
       ROS_DEBUG("---");
       // Capture parameters
       ensenso_ptr_->setAutoBlackLevel(config.groups.capture.AutoBlackLevel);
@@ -263,7 +263,7 @@ class EnsensoDriver
       ensenso_ptr_->setFillBorderSpread(config.groups.postproc.FillBorderSpread);
       ensenso_ptr_->setFillRegionSize(config.groups.postproc.FillRegionSize);
       // Streaming parameters
-      configureStreaming(config.groups.stream.Cloud, config.groups.stream.Images);
+      configureStreaming(config.groups.activate.Cloud, config.groups.activate.Images);
     }
     
     bool configureStreaming(const bool cloud, const bool images)
