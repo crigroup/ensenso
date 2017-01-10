@@ -16,12 +16,13 @@ from ros_numpy.point_cloud2 import get_xyz_points, pointcloud2_to_array
 from ensenso.snatcher import Snatcher
 
 class Snapshotter(Snatcher):
-  def __init__(self, snapshots, exposure_time):
+  def __init__(self, snapshots, exposure_time, light=False):
     super(Snapshotter, self).__init__()
     # Config stuff
     np.set_printoptions(precision=5, suppress=True)
     self.snapshots = snapshots
     self.exposure_time = exposure_time
+    self.light = light
     # Create folder where we will save the snapshoots
     now = rospy.get_time()
     stamp = datetime.datetime.fromtimestamp(now).strftime('%Y-%m-%d-%H-%M-%S')
@@ -44,7 +45,7 @@ class Snapshotter(Snatcher):
       rospy.logdebug('Saving cloud snapshot')
       self.save_cloud(taken)
       rospy.logdebug('Taking images snapshot')
-      self.enable_lights(projector=False, frontlight=False)
+      self.enable_lights(projector=False, frontlight=self.light)
       self.enable_streaming(cloud=False, images=True)
       self.take_snapshot(self.exposure_time, success_fn=self.has_images)
       rospy.logdebug('Saving images snapshot')
@@ -77,6 +78,7 @@ if __name__ == '__main__':
   parser = argparse.ArgumentParser(description='Snapshooter script')
   parser.add_argument('--snapshots', type=int,  default=2,    help='Number of snapshots to be taken, (default=2)')
   parser.add_argument('--exposure', type=float, default=1.0,  help='Exposure time in seconds, (default=1.0)')
+  parser.add_argument('--light', action='store_true',         help='If set, will enable the front light for the camera snapshots')
   parser.add_argument('--debug', action='store_true',         help='If set, will show additional debugging messages')
   args = parser.parse_args(rospy.myargv()[1:])
   log_level= rospy.DEBUG if args.debug else rospy.INFO
@@ -84,6 +86,6 @@ if __name__ == '__main__':
   node_name = os.path.splitext(os.path.basename(__file__))[0]
   rospy.init_node(node_name, log_level=log_level)
   rospy.loginfo('Starting node: {0}'.format(node_name))
-  shotter = Snapshotter(args.snapshots, args.exposure)
+  shotter = Snapshotter(args.snapshots, args.exposure, args.light)
   shotter.execute()
   
