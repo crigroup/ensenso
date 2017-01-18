@@ -37,14 +37,15 @@ class Snatcher(object):
     # Config stuff
     self.use_cv_types = use_cv_types
     self.bridge = CvBridge()
+    self.cv_type = 'mono8'
     self.exposure_time = 1.5
     # Setup publishers and subscribers
     self.reset_snapshots()
-    rospy.Subscriber('left/image_raw', Image, self.cb_raw_left)
-    rospy.Subscriber('right/image_raw', Image, self.cb_raw_right)
-    rospy.Subscriber('left/image_rect', Image, self.cb_rect_left)
-    rospy.Subscriber('right/image_rect', Image, self.cb_rect_right)
-    rospy.Subscriber('depth/points', PointCloud2, self.cb_point_cloud)
+    rospy.Subscriber('left/image_raw', Image, self.cb_raw_left, queue_size=1)
+    rospy.Subscriber('right/image_raw', Image, self.cb_raw_right, queue_size=1)
+    rospy.Subscriber('left/image_rect', Image, self.cb_rect_left, queue_size=1)
+    rospy.Subscriber('right/image_rect', Image, self.cb_rect_right, queue_size=1)
+    rospy.Subscriber('depth/points', PointCloud2, self.cb_point_cloud, queue_size=1)
     # Camera configuration client
     self.dynclient = dynamic_reconfigure.client.Client('ensenso_driver', timeout=30, config_callback=self.cb_dynresponse)
   
@@ -72,7 +73,7 @@ class Snatcher(object):
     self.headers['raw_left'] = copy.deepcopy(msg.header)
     if self.use_cv_types:
       try:
-        self.raw_left = self.bridge.imgmsg_to_cv2(msg, 'mono8')
+        self.raw_left = self.bridge.imgmsg_to_cv2(msg, self.cv_type)
       except:
         rospy.logdebug('Failed to process raw_left image')
         self.raw_left = None
@@ -88,7 +89,7 @@ class Snatcher(object):
     self.headers['raw_right'] = copy.deepcopy(msg.header)
     if self.use_cv_types:
       try:
-        self.raw_right = self.bridge.imgmsg_to_cv2(msg, 'mono8')
+        self.raw_right = self.bridge.imgmsg_to_cv2(msg, self.cv_type)
       except:
         rospy.logdebug('Failed to process raw_right image')
         self.raw_right = None
@@ -104,7 +105,7 @@ class Snatcher(object):
     self.headers['rect_left'] = copy.deepcopy(msg.header)
     if self.use_cv_types:
       try:
-        self.rect_left = self.bridge.imgmsg_to_cv2(msg, 'mono8')
+        self.rect_left = self.bridge.imgmsg_to_cv2(msg, self.cv_type)
       except:
         rospy.logdebug('Failed to process rect_left image')
         self.rect_left = None
@@ -120,7 +121,7 @@ class Snatcher(object):
     self.headers['rect_right'] = copy.deepcopy(msg.header)
     if self.use_cv_types:
       try:
-        self.rect_right = self.bridge.imgmsg_to_cv2(msg, 'mono8')
+        self.rect_right = self.bridge.imgmsg_to_cv2(msg, self.cv_type)
       except:
         rospy.logdebug('Failed to process rect_right image')
         self.rect_right = None
