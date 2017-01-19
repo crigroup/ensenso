@@ -34,6 +34,7 @@ class Snatcher(object):
     @param use_cv_types: If true will convert image messages to valid OpenCV type.
     @note: If your B{topics are different} use ros remapping.
     """
+    self.initialized = False
     # Config stuff
     self.use_cv_types = use_cv_types
     self.bridge = CvBridge()
@@ -48,6 +49,7 @@ class Snatcher(object):
     rospy.Subscriber('depth/points', PointCloud2, self.cb_point_cloud, queue_size=1)
     # Camera configuration client
     self.dynclient = dynamic_reconfigure.client.Client('ensenso_driver', timeout=30, config_callback=self.cb_dynresponse)
+    self.initialized = True
   
   def cb_dynresponse(self, config):
     """
