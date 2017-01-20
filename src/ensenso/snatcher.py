@@ -2,6 +2,7 @@
 import os
 import copy
 import rospy
+import criros
 import numpy as np
 import dynamic_reconfigure.client
 # OpenCV and PCL
@@ -16,6 +17,41 @@ from sensor_msgs.msg import (
   Image, 
   PointCloud2
 )
+
+
+class EnsensoDriverReconfigure():
+  def __init__(self, namespace='/'):
+    ns = criros.utils.solve_namespace(namespace)
+    self.dynclient = dynamic_reconfigure.client.Client(ns+'ensenso_driver', timeout=30, config_callback=self.cb_dynresponse)
+  
+  def cb_dynresponse(self, config):
+    """
+    TODO: Check that the configuration succeeded.
+    """
+    pass
+  
+  def update_configuration(self, config):
+    return self.dynclient.update_configuration(config)
+  
+  def enable_lights(self, projector=False, frontlight=False):
+    """
+    Switches on/off the projector and/or the frontlight
+    @type  projector: bool
+    @param projector: Switch on/off the projector
+    @type  frontlight: bool
+    @param frontlight: Switch on/off the frontlight
+    """
+    self.dynclient.update_configuration({'Projector':projector, 'FrontLight':frontlight})
+  
+  def enable_streaming(self, cloud=False, images=False):
+    """
+    Enable/disable the streaming of the point cloud and/or the images
+    @type  cloud: bool
+    @param cloud: Enable/disable the streaming of the point cloud
+    @type  images: bool
+    @param images: Enable/disable the streaming of the images
+    """
+    self.dynclient.update_configuration({'Cloud':cloud, 'Images':images})
 
 
 class Snatcher(object):
@@ -48,7 +84,7 @@ class Snatcher(object):
     rospy.Subscriber('right/image_rect', Image, self.cb_rect_right, queue_size=1)
     rospy.Subscriber('depth/points', PointCloud2, self.cb_point_cloud, queue_size=1)
     # Camera configuration client
-    self.dynclient = dynamic_reconfigure.client.Client('ensenso_driver', timeout=30, config_callback=self.cb_dynresponse)
+    self.dynclient = EnsensoDriverReconfigure(namespace=rospy.get_namespace())
     self.initialized = True
   
   def cb_dynresponse(self, config):
