@@ -271,7 +271,7 @@ class EnsensoDriver
       if ((is_streaming_cloud_ == cloud) && (is_streaming_images_ == images))
         return true;  // Nothing to be done here
       is_streaming_cloud_ = cloud;
-      is_streaming_images_ == images;
+      is_streaming_images_ = images;
       bool was_running = ensenso_ptr_->isRunning();
       if (was_running)
         ensenso_ptr_->stop();
