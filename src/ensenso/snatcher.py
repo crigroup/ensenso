@@ -229,6 +229,10 @@ class Snatcher(object):
     self.rect_left = None
     self.rect_right = None
   
+  def stop_streaming(self):
+    self.enable_lights(projector=False, frontlight=False)
+    self.enable_streaming(cloud=False, images=False)
+  
   def take_snapshot(self, exposure_time, success_fn, check_interval=1/30.):
     """
     Wait until we have snatched the information encoded in C{success_fn}
