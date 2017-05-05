@@ -21,6 +21,7 @@
 #include <std_msgs/String.h>
 // Services
 #include <ensenso/CalibrateHandEye.h>
+#include <ensenso/CollectPattern.h>
 #include <ensenso/EstimatePatternPose.h>
 
 
@@ -36,6 +37,7 @@ class EnsensoDriver
     // ROS
     ros::NodeHandle                   nh_, nh_private_;
     ros::ServiceServer                pattern_srv_;
+    ros::ServiceServer                collect_srv_;
     ros::ServiceServer                calibrate_srv_;
     dynamic_reconfigure::Server<ensenso::CameraParametersConfig> reconfigure_server_;
     // Images
@@ -103,6 +105,7 @@ class EnsensoDriver
       // Advertise services
       calibrate_srv_ = nh_.advertiseService("calibrate_handeye", &EnsensoDriver::calibrateHandEyeCB, this);
       pattern_srv_ = nh_.advertiseService("estimate_pattern_pose", &EnsensoDriver::estimatePatternPoseCB, this);
+      collect_srv_ = nh_.advertiseService("collect_pattern", &EnsensoDriver::collectPatternCB, this);
       ROS_INFO("Finished [ensenso_driver] initialization");
     }
     
@@ -119,7 +122,6 @@ class EnsensoDriver
       if (was_running)
         ensenso_ptr_->stop();
       // Check consistency between robot and pattern poses
-      // TODO: Include request.pattern_poses in the PatternCount check
       if ( req.robot_poses.poses.size() != ensenso_ptr_->getPatternCount() )
       {
         ROS_WARN("The number of robot_poses differs from the pattern count in the camera buffer");
@@ -266,6 +268,46 @@ class EnsensoDriver
       configureStreaming(config.groups.activate.Cloud, config.groups.activate.Images);
     }
     
+    bool collectPatternCB(ensenso::CollectPattern::Request& req, ensenso::CollectPattern::Response &res)
+    {
+      bool was_running = ensenso_ptr_->isRunning();
+      if (was_running)
+        ensenso_ptr_->stop();
+      // Check consistency
+      if (!req.decode && req.grid_spacing <= 0)
+      {
+        ROS_WARN("grid_spacing not specify. Forgot to set the request.decode = True?");
+        if (was_running)
+          ensenso_ptr_->start();
+        return true;
+      }
+      // Discard previously saved patterns
+      if (req.clear_buffer)
+        ensenso_ptr_->discardPatterns();
+      // Set the grid spacing
+      if (req.decode)
+      {
+        res.grid_spacing = ensenso_ptr_->decodePattern();
+        // Check consistency
+        if (res.grid_spacing <= 0)
+        {
+          ROS_WARN("Couldn't decode calibration pattern");
+          if (was_running)
+            ensenso_ptr_->start();
+          return true;
+        }
+      }
+      else
+        res.grid_spacing = req.grid_spacing;
+      ensenso_ptr_->setGridSpacing(res.grid_spacing);
+      // Collect pattern
+      res.pattern_count = ensenso_ptr_->collectPattern(req.add_to_buffer);
+      res.success = (res.pattern_count > 0);
+      if (was_running)
+        ensenso_ptr_->start();
+      return true;
+    }
+    
     bool configureStreaming(const bool cloud, const bool images)
     {
       if ((is_streaming_cloud_ == cloud) && (is_streaming_images_ == images))
@@ -309,40 +351,11 @@ class EnsensoDriver
       bool was_running = ensenso_ptr_->isRunning();
       if (was_running)
         ensenso_ptr_->stop();
-      // Check consistency
-      if (!req.decode && req.grid_spacing <= 0)
+      res.success = ensenso_ptr_->getPatternCount() > 0;
+      if (res.success)
       {
-        ROS_WARN("grid_spacing not specify. Forgot to set the request.decode = True?");
-        if (was_running)
-          ensenso_ptr_->start();
-        return true;
-      }
-      // Discard previously saved patterns
-      if (req.discard_patterns)
-        ensenso_ptr_->discardPatterns();
-      // Set the grid spacing
-      if (req.decode)
-      {
-        res.grid_spacing = ensenso_ptr_->decodePattern();
-        // Check consistency
-        if (res.grid_spacing <= 0)
-        {
-          ROS_WARN("Couldn't decode calibration pattern");
-          if (was_running)
-            ensenso_ptr_->start();
-          return true;
-        }
-      }
-      else
-        res.grid_spacing = req.grid_spacing;
-      ensenso_ptr_->setGridSpacing(res.grid_spacing);
-      // Collect pattern
-      res.pattern_count = ensenso_ptr_->collectPattern(req.add_to_buffer);
-      if (res.pattern_count != -1)
-      {
-        // Estimate pattern pose
         Eigen::Affine3d pattern_pose;
-        res.success = ensenso_ptr_->estimatePatternPose(pattern_pose);
+        res.success = ensenso_ptr_->estimatePatternPose(pattern_pose, req.average);
         tf::poseEigenToMsg(pattern_pose, res.pose);
       }
       if (was_running)

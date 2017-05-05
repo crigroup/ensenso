@@ -1,0 +1,8 @@
+bool                add_to_buffer
+bool                clear_buffer
+bool                decode
+float32             grid_spacing
+--- 
+bool                success
+int32               pattern_count
+float32             grid_spacing
