@@ -20,15 +20,18 @@ from sensor_msgs.msg import (
 
 
 class EnsensoDriverReconfigure():
-  def __init__(self, namespace='/'):
+  def __init__(self, namespace='/', timeout=30):
     ns = criros.utils.solve_namespace(namespace)
-    self.dynclient = dynamic_reconfigure.client.Client(ns+'ensenso_driver', timeout=30, config_callback=self.cb_dynresponse)
+    self.dynclient = dynamic_reconfigure.client.Client(ns+'ensenso_driver', timeout=timeout, config_callback=self.cb_dynresponse)
   
   def cb_dynresponse(self, config):
     """
     TODO: Check that the configuration succeeded.
     """
     pass
+  
+  def get_configuration(self, timeout=None):
+    return self.dynclient.get_configuration(timeout=timeout)
   
   def update_configuration(self, config):
     return self.dynclient.update_configuration(config)
