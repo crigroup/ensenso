@@ -10,13 +10,10 @@
   
   <!-- Ensenso driver -->
   <node name="ensenso_driver" pkg="ensenso" type="ensenso_driver" ns="camera" output="screen"> 
+    <!-- Static parameters -->
     <param name="stream_calib_pattern"  type="bool"   value="False" />
     <param name="serial"                type="string" value="$(arg serial)" />
     <param name="camera_frame_id"       type="string" value="camera_optical_frame" />
-  </node>
-  
-  <!-- Driver configuration -->
-  <node name="driver_dynconfig" pkg="dynamic_reconfigure" type="dynparam" args="set_from_parameters ensenso_driver" ns="camera">
     <!-- Capture parameters -->
     <param name="AutoBlackLevel"    type="bool"   value="true" />
     <param name="AutoExposure"      type="bool"   value="true" />
