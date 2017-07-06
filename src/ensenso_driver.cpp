@@ -99,8 +99,7 @@ class EnsensoDriver
       dynamic_reconfigure::Server<ensenso::CameraParametersConfig>::CallbackType f;
       f = boost::bind(&EnsensoDriver::CameraParametersCallback, this, _1, _2);
       reconfigure_server_.setCallback(f);
-      // Start the camera. By default only stream images. You can use dynreconfigure to change the streaming
-      configureStreaming(true, false);
+      // Start the camera.
       ensenso_ptr_->start();
       // Advertise services
       calibrate_srv_ = nh_.advertiseService("calibrate_handeye", &EnsensoDriver::calibrateHandEyeCB, this);
@@ -159,7 +158,7 @@ class EnsensoDriver
     {
       // Process enumerators
       std::string trigger_mode, profile;
-      switch (config.groups.capture.TriggerMode)
+      switch (config.TriggerMode)
       {
         case 0:
           trigger_mode = "Software";
@@ -173,7 +172,7 @@ class EnsensoDriver
         default:
           trigger_mode = "Software";
       }
-      switch (config.groups.stereo.OptimizationProfile)
+      switch (config.OptimizationProfile)
       {
         case 0:
           profile = "Aligned";
@@ -189,83 +188,83 @@ class EnsensoDriver
       }
       ROS_DEBUG("---");
       ROS_DEBUG("Capture Parameters");
-      ROS_DEBUG_STREAM("AutoBlackLevel: "   << std::boolalpha << config.groups.capture.AutoBlackLevel);
-      ROS_DEBUG_STREAM("AutoExposure: "     << std::boolalpha << config.groups.capture.AutoExposure);
-      ROS_DEBUG_STREAM("AutoGain: "         << std::boolalpha << config.groups.capture.AutoGain);
-      ROS_DEBUG_STREAM("Binning: "          << config.groups.capture.Binning);
-      ROS_DEBUG_STREAM("BlackLevelOffset: " << config.groups.capture.BlackLevelOffset);
-      ROS_DEBUG_STREAM("Exposure: "         << config.groups.capture.Exposure);
-      ROS_DEBUG_STREAM("FlexView: "         << std::boolalpha << config.groups.capture.FlexView);
-      ROS_DEBUG_STREAM("FlexViewImages: "   << config.groups.capture.FlexViewImages);
-      ROS_DEBUG_STREAM("FrontLight: "       << std::boolalpha << config.groups.capture.FrontLight);
-      ROS_DEBUG_STREAM("Gain: "             << config.groups.capture.Gain);
-      ROS_DEBUG_STREAM("GainBoost: "        << std::boolalpha << config.groups.capture.GainBoost);
-      ROS_DEBUG_STREAM("HardwareGamma: "    << std::boolalpha << config.groups.capture.HardwareGamma);
-      ROS_DEBUG_STREAM("Hdr: "              << std::boolalpha << config.groups.capture.Hdr);
-      ROS_DEBUG_STREAM("PixelClock: "       << config.groups.capture.PixelClock);
-      ROS_DEBUG_STREAM("Projector: "        << std::boolalpha << config.groups.capture.Projector);
-      ROS_DEBUG_STREAM("TargetBrightness: " << config.groups.capture.TargetBrightness);
+      ROS_DEBUG_STREAM("AutoBlackLevel: "   << std::boolalpha << config.AutoBlackLevel);
+      ROS_DEBUG_STREAM("AutoExposure: "     << std::boolalpha << config.AutoExposure);
+      ROS_DEBUG_STREAM("AutoGain: "         << std::boolalpha << config.AutoGain);
+      ROS_DEBUG_STREAM("Binning: "          << config.Binning);
+      ROS_DEBUG_STREAM("BlackLevelOffset: " << config.BlackLevelOffset);
+      ROS_DEBUG_STREAM("Exposure: "         << config.Exposure);
+      ROS_DEBUG_STREAM("FlexView: "         << std::boolalpha << config.FlexView);
+      ROS_DEBUG_STREAM("FlexViewImages: "   << config.FlexViewImages);
+      ROS_DEBUG_STREAM("FrontLight: "       << std::boolalpha << config.FrontLight);
+      ROS_DEBUG_STREAM("Gain: "             << config.Gain);
+      ROS_DEBUG_STREAM("GainBoost: "        << std::boolalpha << config.GainBoost);
+      ROS_DEBUG_STREAM("HardwareGamma: "    << std::boolalpha << config.HardwareGamma);
+      ROS_DEBUG_STREAM("Hdr: "              << std::boolalpha << config.Hdr);
+      ROS_DEBUG_STREAM("PixelClock: "       << config.PixelClock);
+      ROS_DEBUG_STREAM("Projector: "        << std::boolalpha << config.Projector);
+      ROS_DEBUG_STREAM("TargetBrightness: " << config.TargetBrightness);
       ROS_DEBUG_STREAM("TriggerMode: "      << trigger_mode);
-      ROS_DEBUG_STREAM("DisparityMapAOI: "  << std::boolalpha << config.groups.capture.DisparityMapAOI);
+      ROS_DEBUG_STREAM("DisparityMapAOI: "  << std::boolalpha << config.DisparityMapAOI);
       ROS_DEBUG("Stereo Matching Parameters");
-      ROS_DEBUG_STREAM("MinimumDisparity: "     << config.groups.stereo.MinimumDisparity);
-      ROS_DEBUG_STREAM("NumberOfDisparities: "  << config.groups.stereo.NumberOfDisparities);
+      ROS_DEBUG_STREAM("MinimumDisparity: "     << config.MinimumDisparity);
+      ROS_DEBUG_STREAM("NumberOfDisparities: "  << config.NumberOfDisparities);
       ROS_DEBUG_STREAM("OptimizationProfile: "  << profile);
-      ROS_DEBUG_STREAM("Scaling: "              << config.groups.stereo.Scaling);
+      ROS_DEBUG_STREAM("Scaling: "              << config.Scaling);
       ROS_DEBUG("Advanced Matching Parameters");
-      ROS_DEBUG_STREAM("DepthChangeCost: " << config.groups.stereo.DepthChangeCost);
-      ROS_DEBUG_STREAM("DepthStepCost: " << config.groups.stereo.DepthStepCost);
-      ROS_DEBUG_STREAM("ShadowingThreshold: " << config.groups.stereo.ShadowingThreshold);
+      ROS_DEBUG_STREAM("DepthChangeCost: " << config.DepthChangeCost);
+      ROS_DEBUG_STREAM("DepthStepCost: " << config.DepthStepCost);
+      ROS_DEBUG_STREAM("ShadowingThreshold: " << config.ShadowingThreshold);
       ROS_DEBUG("Postprocessing Parameters");
-      ROS_DEBUG_STREAM("UniquenessRatio: " << config.groups.postproc.UniquenessRatio);
-      ROS_DEBUG_STREAM("MedianFilterRadius: "<< config.groups.postproc.MedianFilterRadius);
-      ROS_DEBUG_STREAM("SpeckleComponentThreshold: "<< config.groups.postproc.SpeckleComponentThreshold);
-      ROS_DEBUG_STREAM("SpeckleRegionSize: "<< config.groups.postproc.SpeckleRegionSize);
-      ROS_DEBUG_STREAM("FillBorderSpread: "<< config.groups.postproc.FillBorderSpread);
-      ROS_DEBUG_STREAM("FillRegionSize: " << config.groups.postproc.FillRegionSize);
+      ROS_DEBUG_STREAM("UniquenessRatio: " << config.UniquenessRatio);
+      ROS_DEBUG_STREAM("MedianFilterRadius: "<< config.MedianFilterRadius);
+      ROS_DEBUG_STREAM("SpeckleComponentThreshold: "<< config.SpeckleComponentThreshold);
+      ROS_DEBUG_STREAM("SpeckleRegionSize: "<< config.SpeckleRegionSize);
+      ROS_DEBUG_STREAM("FillBorderSpread: "<< config.FillBorderSpread);
+      ROS_DEBUG_STREAM("FillRegionSize: " << config.FillRegionSize);
       ROS_DEBUG("Stream Parameters");
-      ROS_DEBUG_STREAM("Cloud: "   << std::boolalpha << config.groups.activate.Cloud);
-      ROS_DEBUG_STREAM("Images: "   << std::boolalpha << config.groups.activate.Images);
+      ROS_DEBUG_STREAM("Cloud: "   << std::boolalpha << config.Cloud);
+      ROS_DEBUG_STREAM("Images: "   << std::boolalpha << config.Images);
       ROS_DEBUG("---");
       // Capture parameters
-      ensenso_ptr_->setAutoBlackLevel(config.groups.capture.AutoBlackLevel);
-      ensenso_ptr_->setAutoExposure(config.groups.capture.AutoExposure);
-      ensenso_ptr_->setAutoGain(config.groups.capture.AutoGain);
-      ensenso_ptr_->setBlackLevelOffset(config.groups.capture.BlackLevelOffset);
-      ensenso_ptr_->setExposure(config.groups.capture.Exposure);
-      ensenso_ptr_->setFrontLight(config.groups.capture.FrontLight);
-      ensenso_ptr_->setGain(config.groups.capture.Gain);
-      ensenso_ptr_->setGainBoost(config.groups.capture.GainBoost);
-      ensenso_ptr_->setHardwareGamma(config.groups.capture.HardwareGamma);
-      ensenso_ptr_->setHdr(config.groups.capture.Hdr);
-      ensenso_ptr_->setPixelClock(config.groups.capture.PixelClock);
-      ensenso_ptr_->setProjector(config.groups.capture.Projector);
-      ensenso_ptr_->setTargetBrightness(config.groups.capture.TargetBrightness);
+      ensenso_ptr_->setAutoBlackLevel(config.AutoBlackLevel);
+      ensenso_ptr_->setAutoExposure(config.AutoExposure);
+      ensenso_ptr_->setAutoGain(config.AutoGain);
+      ensenso_ptr_->setBlackLevelOffset(config.BlackLevelOffset);
+      ensenso_ptr_->setExposure(config.Exposure);
+      ensenso_ptr_->setFrontLight(config.FrontLight);
+      ensenso_ptr_->setGain(config.Gain);
+      ensenso_ptr_->setGainBoost(config.GainBoost);
+      ensenso_ptr_->setHardwareGamma(config.HardwareGamma);
+      ensenso_ptr_->setHdr(config.Hdr);
+      ensenso_ptr_->setPixelClock(config.PixelClock);
+      ensenso_ptr_->setProjector(config.Projector);
+      ensenso_ptr_->setTargetBrightness(config.TargetBrightness);
       ensenso_ptr_->setTriggerMode(trigger_mode);
-      ensenso_ptr_->setUseDisparityMapAreaOfInterest(config.groups.capture.DisparityMapAOI);
+      ensenso_ptr_->setUseDisparityMapAreaOfInterest(config.DisparityMapAOI);
       // Flexview and binning only work in 'Software' trigger mode and with the projector on
-      if (trigger_mode.compare("Software") == 0 && config.groups.capture.Projector)
+      if (trigger_mode.compare("Software") == 0 && config.Projector)
       {
-        ensenso_ptr_->setBinning(config.groups.capture.Binning);
-        ensenso_ptr_->setFlexView(config.groups.capture.FlexView, config.groups.capture.FlexViewImages);
+        ensenso_ptr_->setBinning(config.Binning);
+        ensenso_ptr_->setFlexView(config.FlexView, config.FlexViewImages);
       }
       // Stereo parameters
-      ensenso_ptr_->setMinimumDisparity(config.groups.stereo.MinimumDisparity);
-      ensenso_ptr_->setNumberOfDisparities(config.groups.stereo.NumberOfDisparities);
+      ensenso_ptr_->setMinimumDisparity(config.MinimumDisparity);
+      ensenso_ptr_->setNumberOfDisparities(config.NumberOfDisparities);
       ensenso_ptr_->setOptimizationProfile(profile);
-      ensenso_ptr_->setScaling(config.groups.stereo.Scaling);
-      ensenso_ptr_->setDepthChangeCost(config.groups.stereo.DepthChangeCost);
-      ensenso_ptr_->setDepthStepCost(config.groups.stereo.DepthStepCost);
-      ensenso_ptr_->setShadowingThreshold(config.groups.stereo.ShadowingThreshold);
+      ensenso_ptr_->setScaling(config.Scaling);
+      ensenso_ptr_->setDepthChangeCost(config.DepthChangeCost);
+      ensenso_ptr_->setDepthStepCost(config.DepthStepCost);
+      ensenso_ptr_->setShadowingThreshold(config.ShadowingThreshold);
       //Postprocessing parameters
-      ensenso_ptr_->setUniquenessRatio(config.groups.postproc.UniquenessRatio);
-      ensenso_ptr_->setMedianFilterRadius(config.groups.postproc.MedianFilterRadius);
-      ensenso_ptr_->setSpeckleComponentThreshold(config.groups.postproc.SpeckleComponentThreshold);
-      ensenso_ptr_->setSpeckleRegionSize(config.groups.postproc.SpeckleRegionSize);
-      ensenso_ptr_->setFillBorderSpread(config.groups.postproc.FillBorderSpread);
-      ensenso_ptr_->setFillRegionSize(config.groups.postproc.FillRegionSize);
+      ensenso_ptr_->setUniquenessRatio(config.UniquenessRatio);
+      ensenso_ptr_->setMedianFilterRadius(config.MedianFilterRadius);
+      ensenso_ptr_->setSpeckleComponentThreshold(config.SpeckleComponentThreshold);
+      ensenso_ptr_->setSpeckleRegionSize(config.SpeckleRegionSize);
+      ensenso_ptr_->setFillBorderSpread(config.FillBorderSpread);
+      ensenso_ptr_->setFillRegionSize(config.FillRegionSize);
       // Streaming parameters
-      configureStreaming(config.groups.activate.Cloud, config.groups.activate.Images);
+      configureStreaming(config.Cloud, config.Images);
     }
     
     bool collectPatternCB(ensenso::CollectPattern::Request& req, ensenso::CollectPattern::Response &res)
