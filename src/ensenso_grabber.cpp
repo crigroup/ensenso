@@ -199,7 +199,7 @@ int pcl::EnsensoGrabber::collectPattern (const bool buffer) const
   catch (NxLibException &ex)
   {
     ensensoExceptionHandling (ex, "collectPattern");
-    return (-1);
+    return getPatternCount();
   }
   return getPatternCount();
 }
@@ -486,7 +486,7 @@ bool pcl::EnsensoGrabber::jsonToMatrix (const std::string json, Eigen::Affine3d 
   }
 }
 
-bool pcl::EnsensoGrabber::matrixToJson (const Eigen::Affine3d &matrix, std::string &json, 
+bool pcl::EnsensoGrabber::matrixToJson (const Eigen::Affine3d &matrix, std::string &json,
                                         const bool pretty_format) const
 {
   try
@@ -580,7 +580,7 @@ void pcl::EnsensoGrabber::processGrabbing ()
         fps_ = float( 1.0 / (now - last) );
         fps_mutex_.unlock ();
         last = now;
-        
+
         NxLibCommand (cmdCapture).execute ();
         double timestamp;
         camera_[itmImages][itmRaw][itmLeft].getBinaryDataInfo (0, 0, 0, 0, 0, &timestamp);

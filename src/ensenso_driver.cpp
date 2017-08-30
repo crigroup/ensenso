@@ -61,7 +61,7 @@ class EnsensoDriver
     // Ensenso grabber
     boost::signals2::connection       connection_;
     pcl::EnsensoGrabber::Ptr          ensenso_ptr_;
-    
+
   public:
      EnsensoDriver():
       is_streaming_images_(false),
@@ -107,14 +107,14 @@ class EnsensoDriver
       collect_srv_ = nh_.advertiseService("collect_pattern", &EnsensoDriver::collectPatternCB, this);
       ROS_INFO("Finished [ensenso_driver] initialization");
     }
-    
+
     ~EnsensoDriver()
     {
       connection_.disconnect();
       ensenso_ptr_->closeTcpPort();
       ensenso_ptr_->closeDevice();
     }
-    
+
     bool calibrateHandEyeCB(ensenso::CalibrateHandEye::Request& req, ensenso::CalibrateHandEye::Response &res)
     {
       bool was_running = ensenso_ptr_->isRunning();
@@ -128,7 +128,7 @@ class EnsensoDriver
           ensenso_ptr_->start();
         return true;
       }
-      // Convert poses to Eigen::Affine3d 
+      // Convert poses to Eigen::Affine3d
       std::vector<Eigen::Affine3d, Eigen::aligned_allocator<Eigen::Affine3d> > robot_eigen_list;
       for (size_t i = 0; i < req.robot_poses.poses.size(); i++) {
         Eigen::Affine3d pose;
@@ -140,8 +140,8 @@ class EnsensoDriver
       tf::poseMsgToEigen(req.camera_seed, camera_seed);
       tf::poseMsgToEigen(req.pattern_seed, pattern_seed);
       ROS_INFO("calibrateHandEye: It may take up to 5 minutes...");
-      res.success = ensenso_ptr_->calibrateHandEye(robot_eigen_list, camera_seed, pattern_seed, 
-                      req.setup, estimated_camera_pose, estimated_pattern_pose, res.iterations, 
+      res.success = ensenso_ptr_->calibrateHandEye(robot_eigen_list, camera_seed, pattern_seed,
+                      req.setup, estimated_camera_pose, estimated_pattern_pose, res.iterations,
                       res.reprojection_error);
       if (res.success)
       {
@@ -153,7 +153,7 @@ class EnsensoDriver
         ensenso_ptr_->start();
       return true;
     }
-    
+
     void CameraParametersCallback(ensenso::CameraParametersConfig &config, uint32_t level)
     {
       // Process enumerators
@@ -266,7 +266,7 @@ class EnsensoDriver
       // Streaming parameters
       configureStreaming(config.Cloud, config.Images);
     }
-    
+
     bool collectPatternCB(ensenso::CollectPattern::Request& req, ensenso::CollectPattern::Response &res)
     {
       bool was_running = ensenso_ptr_->isRunning();
@@ -300,13 +300,14 @@ class EnsensoDriver
         res.grid_spacing = req.grid_spacing;
       ensenso_ptr_->setGridSpacing(res.grid_spacing);
       // Collect pattern
+      int prev_pattern_count = ensenso_ptr_->getPatternCount();
       res.pattern_count = ensenso_ptr_->collectPattern(req.add_to_buffer);
-      res.success = (res.pattern_count > 0);
+      res.success = (res.pattern_count == prev_pattern_count+1);
       if (was_running)
         ensenso_ptr_->start();
       return true;
     }
-    
+
     bool configureStreaming(const bool cloud, const bool images)
     {
       if ((is_streaming_cloud_ == cloud) && (is_streaming_images_ == images))
@@ -322,7 +323,7 @@ class EnsensoDriver
       if (cloud && images)
       {
         boost::function<void(
-          const boost::shared_ptr<PointCloudXYZ>&, 
+          const boost::shared_ptr<PointCloudXYZ>&,
           const boost::shared_ptr<PairOfImages>&,
           const boost::shared_ptr<PairOfImages>&)> f = boost::bind (&EnsensoDriver::grabberCallback, this, _1, _2, _3);
         connection_ = ensenso_ptr_->registerCallback(f);
@@ -344,7 +345,7 @@ class EnsensoDriver
         ensenso_ptr_->start();
       return true;
     }
-    
+
     bool estimatePatternPoseCB(ensenso::EstimatePatternPose::Request& req, ensenso::EstimatePatternPose::Response &res)
     {
       bool was_running = ensenso_ptr_->isRunning();
@@ -361,7 +362,7 @@ class EnsensoDriver
         ensenso_ptr_->start();
       return true;
     }
-    
+
     void grabberCallback( const boost::shared_ptr<PointCloudXYZ>& cloud)
     {
       // Point cloud
@@ -374,7 +375,7 @@ class EnsensoDriver
         cloud_pub_.publish(cloud_msg);
       }
     }
-    
+
     void grabberCallback( const boost::shared_ptr<PairOfImages>& rawimages, const boost::shared_ptr<PairOfImages>& rectifiedimages)
     {
       ros::Time now = ros::Time::now();
@@ -398,7 +399,7 @@ class EnsensoDriver
       // Publish calibration pattern info (if any)
       publishCalibrationPattern(now);
     }
-    
+
     void grabberCallback( const boost::shared_ptr<PointCloudXYZ>& cloud,
                           const boost::shared_ptr<PairOfImages>& rawimages, const boost::shared_ptr<PairOfImages>& rectifiedimages)
     {
@@ -435,7 +436,7 @@ class EnsensoDriver
         cloud_pub_.publish(cloud_msg);
       }
     }
-    
+
     void publishCalibrationPattern(const ros::Time &now)
     {
       int pose_subs = pattern_pose_pub_.getNumSubscribers();
@@ -483,7 +484,7 @@ class EnsensoDriver
         }
       }
     }
-    
+
     sensor_msgs::ImagePtr toImageMsg(pcl::PCLImage pcl_image, const ros::Time &now)
     {
       unsigned char *image_array = reinterpret_cast<unsigned char *>(&pcl_image.data[0]);
