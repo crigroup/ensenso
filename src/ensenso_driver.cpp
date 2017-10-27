@@ -27,8 +27,8 @@
 
 // Typedefs
 typedef std::pair<pcl::PCLImage, pcl::PCLImage> PairOfImages;
-typedef pcl::PointXYZ PointXYZ;
-typedef pcl::PointCloud<PointXYZ> PointCloudXYZ;
+typedef pcl::PointXYZRGB PointXYZRGB;
+typedef pcl::PointCloud<PointXYZRGB> PointCloudXYZRGB;
 
 
 class EnsensoDriver
@@ -69,10 +69,13 @@ class EnsensoDriver
       nh_private_("~")
     {
       // Read parameters
-      std::string serial;
+      std::string serial, monoserial;
       nh_private_.param(std::string("serial"), serial, std::string("150534"));
       if (!nh_private_.hasParam("serial"))
         ROS_WARN_STREAM("Parameter [~serial] not found, using default: " << serial);
+      nh_private_.param(std::string("monoserial"), monoserial, std::string("4103203953"));
+      if (!nh_private_.hasParam("monoserial"))
+        ROS_WARN_STREAM("Parameter [~monoserial] not found, using default: " << monoserial);
       nh_private_.param("camera_frame_id", camera_frame_id_, std::string("ensenso_optical_frame"));
       if (!nh_private_.hasParam("camera_frame_id"))
         ROS_WARN_STREAM("Parameter [~camera_frame_id] not found, using default: " << camera_frame_id_);
@@ -92,6 +95,7 @@ class EnsensoDriver
       pattern_pose_pub_=nh_.advertise<geometry_msgs::PoseStamped> ("pattern/pose", 1, false);
       // Initialize Ensenso
       ensenso_ptr_.reset(new pcl::EnsensoGrabber);
+      ensenso_ptr_->openMonoDevice(monoserial);
       ensenso_ptr_->openDevice(serial);
       ensenso_ptr_->openTcpPort();
       ensenso_ptr_->storeCalibrationPattern(stream_calib_pattern_);
@@ -113,6 +117,7 @@ class EnsensoDriver
       connection_.disconnect();
       ensenso_ptr_->closeTcpPort();
       ensenso_ptr_->closeDevice();
+      ensenso_ptr_->closeMonoDevice();
     }
 
     bool calibrateHandEyeCB(ensenso::CalibrateHandEye::Request& req, ensenso::CalibrateHandEye::Response &res)
@@ -323,7 +328,7 @@ class EnsensoDriver
       if (cloud && images)
       {
         boost::function<void(
-          const boost::shared_ptr<PointCloudXYZ>&,
+          const boost::shared_ptr<PointCloudXYZRGB>&,
           const boost::shared_ptr<PairOfImages>&,
           const boost::shared_ptr<PairOfImages>&)> f = boost::bind (&EnsensoDriver::grabberCallback, this, _1, _2, _3);
         connection_ = ensenso_ptr_->registerCallback(f);
@@ -338,7 +343,7 @@ class EnsensoDriver
       else if (cloud)
       {
         boost::function<void(
-            const boost::shared_ptr<PointCloudXYZ>&)> f = boost::bind (&EnsensoDriver::grabberCallback, this, _1);
+            const boost::shared_ptr<PointCloudXYZRGB>&)> f = boost::bind (&EnsensoDriver::grabberCallback, this, _1);
         connection_ = ensenso_ptr_->registerCallback(f);
       }
       if (was_running)
@@ -363,7 +368,7 @@ class EnsensoDriver
       return true;
     }
 
-    void grabberCallback( const boost::shared_ptr<PointCloudXYZ>& cloud)
+    void grabberCallback( const boost::shared_ptr<PointCloudXYZRGB>& cloud)
     {
       // Point cloud
       if (cloud_pub_.getNumSubscribers() > 0)
@@ -400,7 +405,7 @@ class EnsensoDriver
       publishCalibrationPattern(now);
     }
 
-    void grabberCallback( const boost::shared_ptr<PointCloudXYZ>& cloud,
+    void grabberCallback( const boost::shared_ptr<PointCloudXYZRGB>& cloud,
                           const boost::shared_ptr<PairOfImages>& rawimages, const boost::shared_ptr<PairOfImages>& rectifiedimages)
     {
       ros::Time now = ros::Time::now();

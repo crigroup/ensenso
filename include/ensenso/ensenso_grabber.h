@@ -14,10 +14,9 @@
 #include <camera_info_manager/camera_info_manager.h>
 // Ensenso SDK
 #include <nxLib.h>
-
 namespace pcl
 {
-struct PointXYZ;
+struct PointXYZRGB;
 template <typename T> class PointCloud;
 
 /**
@@ -37,13 +36,13 @@ public:
     
     // Define callback signature typedefs
     typedef void
-    (sig_cb_ensenso_point_cloud)(const pcl::PointCloud<pcl::PointXYZ>::Ptr &);
+    (sig_cb_ensenso_point_cloud)(const pcl::PointCloud<pcl::PointXYZRGB>::Ptr &);
     
     typedef void
     (sig_cb_ensenso_images)(const boost::shared_ptr<PairOfImages> &,const boost::shared_ptr<PairOfImages> &);
     
     typedef void
-    (sig_cb_ensenso_point_cloud_images)(const pcl::PointCloud<pcl::PointXYZ>::Ptr &,
+    (sig_cb_ensenso_point_cloud_images)(const pcl::PointCloud<pcl::PointXYZRGB>::Ptr &,
                                         const boost::shared_ptr<PairOfImages> &,const boost::shared_ptr<PairOfImages> &);
     /** @endcond */
     
@@ -84,6 +83,10 @@ public:
     /** @brief Closes the Ensenso device
      * @return True if successful, false otherwise */
     bool closeDevice ();
+
+    /** @brief Closes the Ensenso device
+     * @return True if successful, false otherwise */
+    bool closeMonoDevice ();
     
     /** @brief Close TCP port program
      * @return True if successful, false otherwise
@@ -171,6 +174,12 @@ public:
      * @param[in] serial The camera serial
      * @return True if successful, false otherwise */
     bool openDevice (std::string serial);
+
+
+        /** @brief Opens an Ensenso mono device
+     * @param[in] serial The camera serial
+     * @return True if successful, false otherwise */
+    bool openMonoDevice (std::string serial);
     
     /** @brief Open TCP port to enable access via the 
      * [nxTreeEdit](http://www.ensenso.de/manual/software_components.htm) program.
@@ -465,14 +474,18 @@ protected:
     /** @brief Boost images + point cloud signal */
     boost::signals2::signal<sig_cb_ensenso_point_cloud_images>* point_cloud_images_signal_;
     
+
     /** @brief Reference to the camera tree */
     NxLibItem camera_;
-    
+
     /** @brief Reference to the NxLib tree root */
     boost::shared_ptr<const NxLibItem> root_;
     
     /** @brief Whether an Ensenso device is opened or not */
     bool device_open_;
+
+    /** @brief Whether an Ensenso device is opened or not */
+    bool mono_device_open_;
     
     /** @brief Whether an TCP port is opened or not */
     bool tcp_open_;
@@ -495,6 +508,7 @@ protected:
     /** @brief Camera frames per second (FPS) */
     float fps_;
     
+
     /** @brief Mutual exclusion for FPS computation */
     mutable boost::mutex fps_mutex_;
     

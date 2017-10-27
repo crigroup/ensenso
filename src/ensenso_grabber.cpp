@@ -16,6 +16,7 @@ void ensensoExceptionHandling (const NxLibException &ex,
 
 pcl::EnsensoGrabber::EnsensoGrabber () :
   device_open_ (false),
+  mono_device_open_(false),
   last_stereo_pattern_(""),
   store_calibration_pattern_ (false),
   running_ (false),
@@ -168,6 +169,28 @@ bool pcl::EnsensoGrabber::closeDevice ()
   }
   return (true);
 }
+
+bool pcl::EnsensoGrabber::closeMonoDevice ()
+{
+  if (!mono_device_open_)
+    return (false);
+
+  stop ();
+  PCL_INFO ("Closing Ensenso mono camera\n");
+
+  try
+  {
+    NxLibCommand (cmdClose).execute ();
+    device_open_ = false;
+  }
+  catch (NxLibException &ex)
+  {
+    ensensoExceptionHandling (ex, "closeMonoDevice");
+    return (false);
+  }
+  return (true);
+}
+
 
 bool pcl::EnsensoGrabber::closeTcpPort ()
 {
@@ -522,7 +545,7 @@ bool pcl::EnsensoGrabber::matrixToJson (const Eigen::Affine3d &matrix, std::stri
 }
 
 bool pcl::EnsensoGrabber::openDevice (std::string serial)
-{
+{ 
   if (device_open_)
     PCL_THROW_EXCEPTION (pcl::IOException, "Cannot open multiple devices!");
   PCL_INFO ("Opening Ensenso stereo camera S/N: %s\n", serial.c_str());
@@ -542,6 +565,30 @@ bool pcl::EnsensoGrabber::openDevice (std::string serial)
     return (false);
   }
   device_open_ = true;
+  return (true);
+}
+
+bool pcl::EnsensoGrabber::openMonoDevice (std::string serial)
+{ 
+  if (mono_device_open_)
+    PCL_THROW_EXCEPTION (pcl::IOException, "Cannot open multiple devices!");
+  PCL_INFO ("Opening Ensenso mono camera S/N: %s\n", serial.c_str());
+  try
+  {
+    // Create a pointer referencing the camera's tree item, for easier access:
+    NxLibItem monocam_ = (*root_)[itmCameras][itmBySerialNo][serial];
+    if (!camera_.exists () || monocam_[itmType] != valMonocular)
+      PCL_THROW_EXCEPTION (pcl::IOException, "Please connect a single mono camera to your computer!");
+    NxLibCommand open (cmdOpen);
+    open.parameters ()[itmCameras] = monocam_[itmSerialNumber].asString ();
+    open.execute ();
+  }
+  catch (NxLibException &ex)
+  {
+    ensensoExceptionHandling (ex, "openDevice");
+    return (false);
+  }
+  mono_device_open_ = true;
   return (true);
 }
 
@@ -570,7 +617,7 @@ void pcl::EnsensoGrabber::processGrabbing ()
       // Publish cloud / images
       if (num_slots<sig_cb_ensenso_point_cloud> () > 0 || num_slots<sig_cb_ensenso_images> () > 0 || num_slots<sig_cb_ensenso_point_cloud_images> () > 0)
       {
-        pcl::PointCloud<pcl::PointXYZ>::Ptr cloud (new pcl::PointCloud<pcl::PointXYZ>);
+        pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud (new pcl::PointCloud<pcl::PointXYZRGB>);
         boost::shared_ptr<PairOfImages> rawimages (new PairOfImages);
         boost::shared_ptr<PairOfImages> rectifiedimages (new PairOfImages);
         // Update FPS
@@ -671,15 +718,30 @@ void pcl::EnsensoGrabber::processGrabbing ()
         // Gather point cloud
         if (num_slots<sig_cb_ensenso_point_cloud> () > 0 || num_slots<sig_cb_ensenso_point_cloud_images> () > 0)
         {
+ 
+  
           // Stereo matching task
           NxLibCommand (cmdComputeDisparityMap).execute ();
+          // NxLibCommand (cmdComputePointMap).execute ();
           // Convert disparity map into XYZ data for each pixel
-          NxLibCommand (cmdComputePointMap).execute ();
+          NxLibItem root;
+          NxLibItem monocam = (*root_)[itmCameras][itmBySerialNo]["4103203953"];
+          NxLibCommand renderPM (cmdRenderPointMap);
+          renderPM.parameters()[itmCamera].set("4103203953");
+          // renderPM.parameters()[itmUseOpenGL].set(false);
+          renderPM.parameters()[itmNear].set(50);
+          renderPM.parameters()[itmFar].set(3000);
+          renderPM.execute ();
+
+
           // Get info about the computed point map and copy it into a std::vector
           std::vector<float> pointMap;
+          std::vector<char> rgbData;
           int width, height;
-          camera_[itmImages][itmPointMap].getBinaryDataInfo (&width, &height, 0, 0, 0, 0);
-          camera_[itmImages][itmPointMap].getBinaryData (pointMap, 0);
+
+          monocam[itmImages][itmRectified].getBinaryData(rgbData, 0 );
+          root[itmImages][itmRenderPointMap].getBinaryDataInfo (&width, &height, 0, 0, 0, 0);
+          root[itmImages][itmRenderPointMap].getBinaryData (pointMap, 0);
           // Copy point cloud and convert in meters
           cloud->header.stamp = getPCLStamp (timestamp);
           cloud->points.resize (height * width);
@@ -689,9 +751,14 @@ void pcl::EnsensoGrabber::processGrabbing ()
           // Copy data in point cloud (and convert milimeters in meters)
           for (size_t i = 0; i < pointMap.size (); i += 3)
           {
+            // std::cout << "rgbData: " << rgbData[i] << std::endl;
+
             cloud->points[i / 3].x = pointMap[i] / 1000.0;
             cloud->points[i / 3].y = pointMap[i + 1] / 1000.0;
             cloud->points[i / 3].z = pointMap[i + 2] / 1000.0;
+            cloud->points[i / 3].r = rgbData[i];
+            cloud->points[i / 3].g = rgbData[i+1];
+            cloud->points[i / 3].b = rgbData[i+2];
           }
         }
         // Publish signals
@@ -1252,6 +1319,8 @@ void pcl::EnsensoGrabber::start ()
     return;
   if (!device_open_)
     openDevice (0);
+  if(!mono_device_open_)
+    openMonoDevice (0);
   fps_ = 0.0;
   running_ = true;
   grabber_thread_ = boost::thread (&pcl::EnsensoGrabber::processGrabbing, this);
