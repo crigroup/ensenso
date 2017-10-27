@@ -737,7 +737,6 @@ void pcl::EnsensoGrabber::processGrabbing ()
           std::vector<char> rgbData;
           int width, height;
 
-          monocam_[itmImages][itmRectified].getBinaryData(rgbData, 0 );
           (*root_)[itmImages][itmRenderPointMap].getBinaryDataInfo (&width, &height, 0, 0, 0, 0);
           (*root_)[itmImages][itmRenderPointMap].getBinaryData (pointMap, 0);
           // Copy point cloud and convert in meters
@@ -747,6 +746,17 @@ void pcl::EnsensoGrabber::processGrabbing ()
           cloud->height = height;
           cloud->is_dense = false;
           // Copy data in point cloud (and convert milimeters in meters)
+          NxLibCommand capRGB(cmdCapture);
+          capRGB.parameters()[itmCameras].set(monocam_[itmSerialNumber].asString());
+          capRGB.parameters()[itmOperation].set("New");
+          boost::this_thread::sleep( boost::posix_time::milliseconds(3) ); //try different values
+          capRGB.execute();
+          NxLibCommand recRGB(cmdRectifyImages);
+          recRGB.parameters()[itmCameras].set(monocam_[itmSerialNumber].asString());
+          recRGB.execute();
+          monocam_[itmImages][itmRectified].getBinaryData(rgbData, 0 );
+
+
           for (size_t i = 0; i < pointMap.size (); i += 3)
           {
             // std::cout << "rgbData: " << rgbData[i] << std::endl;
