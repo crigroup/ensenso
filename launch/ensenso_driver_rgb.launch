@@ -42,8 +42,8 @@
     <param name="TriggerMode"      type="int"    value="0" />          <!-- Software: 0, FallingEdge: 1, RisingEdge: 2 -->
 
     <!-- Stereo parameters -->
-    <param name="MinimumDisparity"      type="int"    value="-64" />
-    <param name="NumberOfDisparities"   type="int"    value="128" />
+    <param name="MinimumDisparity"      type="int"    value="-160" />
+    <param name="NumberOfDisparities"   type="int"    value="190" />
     <param name="Scaling"               type="double" value="1.0" />
     <param name="OptimizationProfile"   type="int"    value="2" />     <!-- Aligned: 0, Diagonal: 1, AlignedAndDiagonal: 2 -->
     <param name="DepthChangeCost"       type="int"    value="5" />
@@ -58,4 +58,8 @@
     <param name="FillBorderSpread"          type="int" value="3" />
     <param name="FillRegionSize"            type="int" value="150" />
   </node>
+  
+  <!-- Pointcloud from driver is inverted for some reason -->
+  <node pkg="tf" type="static_transform_publisher" name="link1_broadcaster" args="0 0 0 0 0 3.14 ensenso_workspace camera_optical_frame 10" />
+
 </launch>

@@ -478,6 +478,8 @@ protected:
     /** @brief Reference to the camera tree */
     NxLibItem camera_;
 
+    NxLibItem monocam_;
+
     /** @brief Reference to the NxLib tree root */
     boost::shared_ptr<const NxLibItem> root_;
     
@@ -547,6 +549,7 @@ protected:
      * PCL time stamps are filled for both the images and clouds grabbed (see @ref getPCLStamp)
      * @note The cloud time stamp is the RAW image time stamp */
     void processGrabbing ();
+
 };
 }  // namespace pcl
 

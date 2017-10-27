@@ -576,7 +576,7 @@ bool pcl::EnsensoGrabber::openMonoDevice (std::string serial)
   try
   {
     // Create a pointer referencing the camera's tree item, for easier access:
-    NxLibItem monocam_ = (*root_)[itmCameras][itmBySerialNo][serial];
+    monocam_ = (*root_)[itmCameras][itmBySerialNo][serial];
     if (!camera_.exists () || monocam_[itmType] != valMonocular)
       PCL_THROW_EXCEPTION (pcl::IOException, "Please connect a single mono camera to your computer!");
     NxLibCommand open (cmdOpen);
@@ -724,11 +724,9 @@ void pcl::EnsensoGrabber::processGrabbing ()
           NxLibCommand (cmdComputeDisparityMap).execute ();
           // NxLibCommand (cmdComputePointMap).execute ();
           // Convert disparity map into XYZ data for each pixel
-          NxLibItem root;
-          NxLibItem monocam = (*root_)[itmCameras][itmBySerialNo]["4103203953"];
           NxLibCommand renderPM (cmdRenderPointMap);
-          renderPM.parameters()[itmCamera].set("4103203953");
-          // renderPM.parameters()[itmUseOpenGL].set(false);
+          renderPM.parameters()[itmCamera].set(monocam_[itmSerialNumber].asString());
+          renderPM.parameters()[itmUseOpenGL].set(true);
           renderPM.parameters()[itmNear].set(50);
           renderPM.parameters()[itmFar].set(3000);
           renderPM.execute ();
@@ -739,9 +737,9 @@ void pcl::EnsensoGrabber::processGrabbing ()
           std::vector<char> rgbData;
           int width, height;
 
-          monocam[itmImages][itmRectified].getBinaryData(rgbData, 0 );
-          root[itmImages][itmRenderPointMap].getBinaryDataInfo (&width, &height, 0, 0, 0, 0);
-          root[itmImages][itmRenderPointMap].getBinaryData (pointMap, 0);
+          monocam_[itmImages][itmRectified].getBinaryData(rgbData, 0 );
+          (*root_)[itmImages][itmRenderPointMap].getBinaryDataInfo (&width, &height, 0, 0, 0, 0);
+          (*root_)[itmImages][itmRenderPointMap].getBinaryData (pointMap, 0);
           // Copy point cloud and convert in meters
           cloud->header.stamp = getPCLStamp (timestamp);
           cloud->points.resize (height * width);
