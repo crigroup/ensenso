@@ -11,6 +11,9 @@ notifications:
     recipients:
       - gm130s@gmail.com
 env:
+  global:
+    - ADDITIONAL_DEBS="curl"
+    - BEFORE_SCRIPT=./.ci_preparation.sh
   matrix:
     - ROS_DISTRO="kinetic"  ROS_REPOSITORY_PATH=http://packages.ros.org/ros/ubuntu
     - ROS_DISTRO="kinetic"  ROS_REPOSITORY_PATH=http://packages.ros.org/ros-shadow-fixed/ubuntu
