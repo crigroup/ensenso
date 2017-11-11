@@ -1,7 +1,8 @@
 #!/bin/sh
 
 # Downloading proprietary deb files from https://www.ensenso.com/support/sdk-download, and install them.
-# When using this locally you may need sudo.
+# Lots of logics in this file are specific to Docker. When used on a local host, you will need sudo, but won't need some tweeks.
+
 export RUNLEVEL=3
 PATH_DEB_CODEMETER=/tmp/codemeter.deb
 PATH_DEB_ENSENSO=/tmp/ensenso.deb
