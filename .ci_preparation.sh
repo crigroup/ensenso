@@ -16,6 +16,8 @@ echo "Update content of policy-rc.d."
 printf "#!/bin/sh\nexit 0" > /usr/sbin/policy-rc.d
 
 dpkg --configure -a --force-depends
+apt-get -f -y install
 dpkg -i $PATH_DEB_CODEMETER
+dpkg --configure -a --force-depends
 apt-get -f -y install
 dpkg -i $PATH_DEB_ENSENSO

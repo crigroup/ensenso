@@ -15,7 +15,7 @@ env:
     - ADDITIONAL_DEBS="curl"
     - BEFORE_SCRIPT=./.ci_preparation.sh
   matrix:
-    - ROS_DISTRO="kinetic"  ROS_REPOSITORY_PATH=http://packages.ros.org/ros/ubuntu
+    - ROS_DISTRO="kinetic"  ROS_REPOSITORY_PATH=http://packages.ros.org/ros/ubuntu VERBOSE_OUTPUT=true
     - ROS_DISTRO="kinetic"  ROS_REPOSITORY_PATH=http://packages.ros.org/ros-shadow-fixed/ubuntu
     - ROS_DISTRO="kinetic"  PRERELEASE=true
     - ROS_DISTRO="lunar"    ROS_REPOSITORY_PATH=http://packages.ros.org/ros/ubuntu
