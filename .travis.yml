@@ -13,7 +13,7 @@ notifications:
 env:
   global:
     - ADDITIONAL_DEBS="curl"
-    - BEFORE_SCRIPT=./.ci_preparation.sh
+    - BEFORE_SCRIPT=./scripts/.ci_preparation.sh
   matrix:
     - ROS_DISTRO="kinetic"  ROS_REPOSITORY_PATH=http://packages.ros.org/ros/ubuntu VERBOSE_OUTPUT=true
     - ROS_DISTRO="kinetic"  ROS_REPOSITORY_PATH=http://packages.ros.org/ros-shadow-fixed/ubuntu

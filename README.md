@@ -15,14 +15,13 @@ ROS package developed by [CRI Group](http://www.ntu.edu.sg/home/cuong/), [Nanyan
 
 ### Build Status
 
-*TODO*
-
-(Waiting for travis-ci to give support to Ubuntu 16.04. See [this issue](https://github.com/travis-ci/travis-ci/issues/5821) for details)
-
 ## Installation
 
 ### Requirements
-Download and install from [here](https://www.ensenso.com/support/sdk-download/):
+
+Run `./scripts/install_driver.sh` to install the necessary proprietary software.
+
+As an alternative, manually download and install from [here](https://www.ensenso.com/support/sdk-download/):
 * Wibu CodeMeter runtime (Tested version: 6.40.2402)
 * EnsensoSDK (Tested version: 2.0.146)
 * uEye Driver (Tested version: 4.81.1)
