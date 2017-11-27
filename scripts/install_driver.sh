@@ -9,12 +9,12 @@ URL_ENSENSO=https://download.ensenso.com/s/ensensosdk/download?files=ensenso-sdk
 PATH_DEB_CODEMETER=/tmp/codemeter.deb
 PATH_DEB_ENSENSO=/tmp/ensenso.deb
 
+# Downlad and install codemeter
 wget -O $PATH_DEB_CODEMETER $URL_CODEMETER
-wget -O $PATH_DEB_ENSENSO $URL_ENSENSO
+dpkg -i $PATH_DEB_CODEMETER
+apt-get install -f -y
 
-for path in $PATH_DEB_CODEMETER $PATH_DEB_ENSENSO
-do
-  dpkg --configure -a --force-depends
-  apt-get -f -y install
-  dpkg -i $path
-done
+# Downlad and install ensenso-sdk
+wget -O $PATH_DEB_ENSENSO $URL_ENSENSO
+dpkg -i $PATH_DEB_ENSENSO
+apt-get install -f -y
