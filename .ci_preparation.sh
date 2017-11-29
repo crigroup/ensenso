@@ -6,6 +6,9 @@ printf "#!/bin/sh\nexit 0" > /usr/sbin/policy-rc.d
 # Install optional packages to avoid warnings during compilation
 apt-get install libopenni2-dev libpcap-dev libpng12-dev -y
 
+# Install the driver
+./scripts/install_driver.sh
+
 # Need to patch /opt/ensenso/cmake/FindEnsenso.cmake
 FILE_TO_PATCH="/opt/ensenso/cmake/FindEnsenso.cmake"
 /bin/cat <<EOM >$FILE_TO_PATCH
@@ -37,6 +40,3 @@ find_package_handle_standard_args(Ensenso DEFAULT_MSG
 
 mark_as_advanced(ENSENSO_INCLUDE_DIR ENSENSO_LIBRARY )
 EOM
-
-# Install the driver
-./scripts/install_driver.sh
