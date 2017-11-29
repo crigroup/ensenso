@@ -1,4 +1,5 @@
 # ensenso
+[![Build Status](https://travis-ci.org/crigroup/ensenso.svg?branch=kinetic-devel)](https://travis-ci.org/crigroup/ensenso)
 
 ROS package developed by [CRI Group](http://www.ntu.edu.sg/home/cuong/), [Nanyang Technological University, Singapore](http://www.ntu.edu.sg). This package acts as a ROS driver for ensenso 3D cameras.
 
@@ -13,16 +14,12 @@ ROS package developed by [CRI Group](http://www.ntu.edu.sg/home/cuong/), [Nanyan
 * See the installation instructions below.
 * Throughout the various files in this repository.
 
-### Build Status
-
-*TODO*
-
-(Waiting for travis-ci to give support to Ubuntu 16.04. See [this issue](https://github.com/travis-ci/travis-ci/issues/5821) for details)
-
 ## Installation
 
 ### Requirements
-Download and install from [here](https://www.ensenso.com/support/sdk-download/):
+Run ``./scripts/install_driver.sh` to install the necessary proprietary software.
+
+As an alternative, manually download and install from [here](https://www.ensenso.com/support/sdk-download/):
 * Wibu CodeMeter runtime (Tested version: 6.40.2402)
 * EnsensoSDK (Tested version: 2.0.146)
 * uEye Driver (Tested version: 4.81.1)
