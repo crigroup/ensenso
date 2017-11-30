@@ -1,19 +1,15 @@
 # This config file for Travis CI utilizes industrial_ci package.
 # For more info for the package, see https://github.com/ros-industrial/industrial_ci/blob/master/README.rst
-sudo: required 
+sudo: required
 services:
   - docker
-language: generic 
+language: generic
 compiler:
   - gcc
-notifications:
-  email:
-    recipients:
-      - gm130s@gmail.com
 env:
   global:
     - ADDITIONAL_DEBS="curl"
-    - BEFORE_SCRIPT=./scripts/.ci_preparation.sh
+    - BEFORE_SCRIPT=./.ci_preparation.sh
   matrix:
     - ROS_DISTRO="kinetic"  ROS_REPOSITORY_PATH=http://packages.ros.org/ros/ubuntu VERBOSE_OUTPUT=true
     - ROS_DISTRO="kinetic"  ROS_REPOSITORY_PATH=http://packages.ros.org/ros-shadow-fixed/ubuntu

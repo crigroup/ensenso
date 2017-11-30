@@ -1,4 +1,5 @@
 # ensenso
+[![Build Status](https://travis-ci.org/crigroup/ensenso.svg?branch=kinetic-devel)](https://travis-ci.org/crigroup/ensenso)
 
 ROS package developed by [CRI Group](http://www.ntu.edu.sg/home/cuong/), [Nanyang Technological University, Singapore](http://www.ntu.edu.sg). This package acts as a ROS driver for ensenso 3D cameras.
 
@@ -12,8 +13,6 @@ ROS package developed by [CRI Group](http://www.ntu.edu.sg/home/cuong/), [Nanyan
 ### Documentation
 * See the installation instructions below.
 * Throughout the various files in this repository.
-
-### Build Status
 
 ## Installation
 
