@@ -350,8 +350,10 @@ class EnsensoDriver
       {
         trigger_mode_ = trigger_mode;
         if (was_running)
+        {
           ensenso_ptr_->stop();
           ensenso_ptr_->start();
+        }
       }
       return true;
     }
