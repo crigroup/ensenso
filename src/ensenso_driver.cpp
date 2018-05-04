@@ -53,6 +53,7 @@ class EnsensoDriver
     bool                              is_streaming_cloud_;
     bool                              is_streaming_images_;
     bool                              stream_calib_pattern_;
+    int                               trigger_mode_;
     // Camera info
     ros::Publisher                    linfo_pub_;
     ros::Publisher                    rinfo_pub_;
@@ -66,6 +67,7 @@ class EnsensoDriver
      EnsensoDriver():
       is_streaming_images_(false),
       is_streaming_cloud_(false),
+      trigger_mode_(-1),
       nh_private_("~")
     {
       // Read parameters
@@ -264,7 +266,7 @@ class EnsensoDriver
       ensenso_ptr_->setFillBorderSpread(config.FillBorderSpread);
       ensenso_ptr_->setFillRegionSize(config.FillRegionSize);
       // Streaming parameters
-      configureStreaming(config.Cloud, config.Images);
+      configureStreaming(config.Cloud, config.Images, config.TriggerMode);
     }
 
     bool collectPatternCB(ensenso::CollectPattern::Request& req, ensenso::CollectPattern::Response &res)
@@ -308,41 +310,51 @@ class EnsensoDriver
       return true;
     }
 
-    bool configureStreaming(const bool cloud, const bool images)
+    bool configureStreaming(const bool cloud, const bool images, const int trigger_mode)
     {
-      if ((is_streaming_cloud_ == cloud) && (is_streaming_images_ == images))
-        return true;  // Nothing to be done here
-      is_streaming_cloud_ = cloud;
-      is_streaming_images_ = images;
       bool was_running = ensenso_ptr_->isRunning();
-      if (was_running)
-        ensenso_ptr_->stop();
-      // Disconnect previous connection
-      connection_.disconnect();
-      // Connect new signals
-      if (cloud && images)
+      if ((is_streaming_cloud_ != cloud) || (is_streaming_images_ != images))
       {
-        boost::function<void(
-          const boost::shared_ptr<PointCloudXYZ>&,
-          const boost::shared_ptr<PairOfImages>&,
-          const boost::shared_ptr<PairOfImages>&)> f = boost::bind (&EnsensoDriver::grabberCallback, this, _1, _2, _3);
-        connection_ = ensenso_ptr_->registerCallback(f);
+        is_streaming_cloud_ = cloud;
+        is_streaming_images_ = images;
+        if (was_running)
+          ensenso_ptr_->stop();
+        // Disconnect previous connection
+        connection_.disconnect();
+        // Connect new signals
+        if (cloud && images)
+        {
+          boost::function<void(
+            const boost::shared_ptr<PointCloudXYZ>&,
+            const boost::shared_ptr<PairOfImages>&,
+            const boost::shared_ptr<PairOfImages>&)> f = boost::bind (&EnsensoDriver::grabberCallback, this, _1, _2, _3);
+          connection_ = ensenso_ptr_->registerCallback(f);
+        }
+        else if (images)
+        {
+          boost::function<void(
+            const boost::shared_ptr<PairOfImages>&,
+            const boost::shared_ptr<PairOfImages>&)> f = boost::bind (&EnsensoDriver::grabberCallback, this, _1, _2);
+          connection_ = ensenso_ptr_->registerCallback(f);
+        }
+        else if (cloud)
+        {
+          boost::function<void(
+              const boost::shared_ptr<PointCloudXYZ>&)> f = boost::bind (&EnsensoDriver::grabberCallback, this, _1);
+          connection_ = ensenso_ptr_->registerCallback(f);
+        }
+        if (was_running)
+          ensenso_ptr_->start();
       }
-      else if (images)
+      else if (trigger_mode_ != trigger_mode)
       {
-        boost::function<void(
-          const boost::shared_ptr<PairOfImages>&,
-          const boost::shared_ptr<PairOfImages>&)> f = boost::bind (&EnsensoDriver::grabberCallback, this, _1, _2);
-        connection_ = ensenso_ptr_->registerCallback(f);
+        trigger_mode_ = trigger_mode;
+        if (was_running)
+        {
+          ensenso_ptr_->stop();
+          ensenso_ptr_->start();
+        }
       }
-      else if (cloud)
-      {
-        boost::function<void(
-            const boost::shared_ptr<PointCloudXYZ>&)> f = boost::bind (&EnsensoDriver::grabberCallback, this, _1);
-        connection_ = ensenso_ptr_->registerCallback(f);
-      }
-      if (was_running)
-        ensenso_ptr_->start();
       return true;
     }
 
