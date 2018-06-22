@@ -10,13 +10,13 @@
 #include <pcl/io/grabber.h>
 #include <pcl/common/synchronizer.h>
 // Others
-#include <boost/thread.hpp>
-#include <camera_info_manager/camera_info_manager.h>
+#include <sensor_msgs/CameraInfo.h>
+#include <geometry_msgs/TransformStamped.h>
 // Ensenso SDK
 #include <nxLib.h>
 namespace pcl
 {
-struct PointXYZRGB;
+struct PointXYZRGBA;
 template <typename T> class PointCloud;
 
 /**
@@ -33,17 +33,23 @@ public:
     /** @cond */
     typedef boost::shared_ptr<EnsensoGrabber> Ptr;
     typedef boost::shared_ptr<const EnsensoGrabber> ConstPtr;
-    
+
     // Define callback signature typedefs
     typedef void
-    (sig_cb_ensenso_point_cloud)(const pcl::PointCloud<pcl::PointXYZRGB>::Ptr &);
-    
+    (sig_cb_ensenso_point_cloud)(const pcl::PointCloud<pcl::PointXYZRGBA>::Ptr &);
+
     typedef void
     (sig_cb_ensenso_images)(const boost::shared_ptr<PairOfImages> &,const boost::shared_ptr<PairOfImages> &);
-    
+
     typedef void
-    (sig_cb_ensenso_point_cloud_images)(const pcl::PointCloud<pcl::PointXYZRGB>::Ptr &,
+    (sig_cb_ensenso_point_cloud_images)(const pcl::PointCloud<pcl::PointXYZRGBA>::Ptr &,
                                         const boost::shared_ptr<PairOfImages> &,const boost::shared_ptr<PairOfImages> &);
+    typedef void
+    (sig_cb_ensenso_images_rgb)(const boost::shared_ptr<PairOfImages> &,const boost::shared_ptr<PairOfImages> &,
+                                const boost::shared_ptr<PairOfImages> &);
+    typedef void
+    (sig_cb_ensenso_point_cloud_images_rgb)(const pcl::PointCloud<pcl::PointXYZRGBA>::Ptr &,
+                                            const boost::shared_ptr<PairOfImages> &,const boost::shared_ptr<PairOfImages> &, const boost::shared_ptr<PairOfImages> &);
     /** @endcond */
     
     /** @brief Constructor */
@@ -135,6 +141,12 @@ public:
      * @note See: [sensor_msgs/CameraInfo](http://docs.ros.org/api/sensor_msgs/html/msg/CameraInfo.html)
      */
     bool getCameraInfo(std::string cam, sensor_msgs::CameraInfo &cam_info) const;
+
+    /** @brief Get transformation between stereo frame and rgb frame.
+
+     * @return True if successful, false otherwise
+     */
+    bool getTFtoRGB(geometry_msgs::TransformStamped& tf) const;
     
     /** @brief Get the raw stereo pattern information and the pattern pose. Before using it enable the
      * storeCalibrationPattern.
@@ -190,7 +202,23 @@ public:
     /** @brief Restores the default capture configuration parameters.
      * @return True if successful, false otherwise */
     bool restoreDefaultConfiguration () const;
-    
+
+    /** @brief Enables CUDA support.
+     * @note Needs Ensenso SDK version >= 2.1.7
+     * @param[in] enable When set to true some commands will use CUDA to improve Perfomance
+     * @return True if successful, false otherwise */
+    bool setEnableCUDA (const bool enable=true) const;
+
+    /** @brief Controls, whether the grabber will try finding the pattern in the scene.
+     * @param[in] enable When set to true the grabber will  try finding the pattern in the scene.
+     * @return True if successful, false otherwise */
+    bool setFindPattern (const bool enable=true);
+
+    /** @brief Controls, whether the grabber will use an external ensenso rgb camera.
+     * @param[in] enable When set to true the grabber will use an external ensenso rgb camera.
+     * @return True if successful, false otherwise */
+    bool setUseRGB (const bool enable=true);
+
     /** @brief Controls whether the sensor black level should be adjusted automatically by the image sensor.
      * @param[in] enable When set to true the image sensor black level will be adjusted automatically.
      * @return True if successful, false otherwise */
@@ -357,6 +385,12 @@ public:
      * to hardware limitations. */
     bool setTriggerMode (const std::string mode="Software") const;
     
+    /** @brief The delay between trigger of the stereo camera (and projector) and the RGB camera.
+     * @note This can be used to avoid the projector pattern being visible in RGB.
+     * @param[in] delay Trigger delay in ms.
+     * @return True if successful, false otherwise */
+    bool setRGBTriggerDelay (const float delay=10) const;
+
     /** @brief Reduces the camera's capture AOI to the region necessary for the currently set stereo matching AOI. 
      * This will reduce the image transfer time, especially when setting smaller AOIs for the stereo matching.
      * @param[in] enable When set to true the camera's capture AOI will be reduced.
@@ -449,7 +483,25 @@ public:
      * @note Setting this parameter to 0 disables the hole filling filter.
      * @return True if successful, false otherwise */
     bool setFillRegionSize(const int regionsize) const;
-    
+
+    /** @brief The distance along a camera's z direction below which two neighboring points will be connected to a surface triangle.
+     * @param[in] threshold A threshold in millimeters below which neighboring pixels will be connected to a small surface patch.
+     * @return True if successful, false otherwise */
+    bool setSurfaceConnectivity(const int threshold) const;
+
+    /** @brief Specifies the minimum distance to the ViewPose below which surface elements will be excluded from the depth map.
+     * @note This can be used to exclude the working plane from the depth view.
+     * @param[in] near The clipping plane distance from the camera pose in viewing direction.
+     * @return True if successful, false otherwise */
+    bool setNearPlane(const int near);
+
+    /** @brief Specifies the maximum distance to the ViewPose below which surface elements will be excluded from the depth map.
+     * @note This can be used to exclude the working plane from the depth view.
+     * @param[in] far The clipping plane distance from the camera pose in viewing direction.
+     * @return True if successful, false otherwise */
+    bool setFarPlane(const int far);
+
+
     /** @brief Start the point cloud and or image acquisition
      * @note Opens device "0" if no device is open */
     void start ();
@@ -473,7 +525,12 @@ protected:
     
     /** @brief Boost images + point cloud signal */
     boost::signals2::signal<sig_cb_ensenso_point_cloud_images>* point_cloud_images_signal_;
+
+    /** @brief Boost images signal with RGB */
+    boost::signals2::signal<sig_cb_ensenso_images_rgb>* images_signal_rgb_;
     
+    /** @brief Boost images + point cloud signal with RGB */
+    boost::signals2::signal<sig_cb_ensenso_point_cloud_images_rgb>* point_cloud_images_signal_rgb_;
 
     /** @brief Reference to the camera tree */
     NxLibItem camera_;
@@ -483,6 +540,13 @@ protected:
     /** @brief Reference to the NxLib tree root */
     boost::shared_ptr<const NxLibItem> root_;
     
+    /** @brief Whether the grabber uses RGB or not */
+    bool use_rgb_;
+
+    /** @brief Whether the grabber tries to find the pattern or not */
+    bool find_pattern_;
+
+
     /** @brief Whether an Ensenso device is opened or not */
     bool device_open_;
 
@@ -507,9 +571,14 @@ protected:
     /** @brief Whether an Ensenso device is running or not */
     bool running_;
     
+    /** @brief Near plane Parameter for the RenderPointMap command */
+    int near_plane_;
+
+    /** @brief Far plane Parameter for the RenderPointMap command */
+    int far_plane_;
+
     /** @brief Camera frames per second (FPS) */
     float fps_;
-    
 
     /** @brief Mutual exclusion for FPS computation */
     mutable boost::mutex fps_mutex_;

@@ -20,11 +20,15 @@ pcl::EnsensoGrabber::EnsensoGrabber () :
   last_stereo_pattern_(""),
   store_calibration_pattern_ (false),
   running_ (false),
-  tcp_open_ (false)
+  tcp_open_ (false),
+  use_rgb_(false)
 {
   point_cloud_signal_ = createSignal<sig_cb_ensenso_point_cloud> ();
   images_signal_ = createSignal<sig_cb_ensenso_images> ();
   point_cloud_images_signal_ = createSignal<sig_cb_ensenso_point_cloud_images> ();
+  images_signal_rgb_ = createSignal<sig_cb_ensenso_images_rgb> ();
+  point_cloud_images_signal_rgb_ = createSignal<sig_cb_ensenso_point_cloud_images_rgb> ();
+
   PCL_INFO ("Initialising nxLib\n");
   try
   {
@@ -48,6 +52,8 @@ pcl::EnsensoGrabber::~EnsensoGrabber () throw ()
     disconnect_all_slots<sig_cb_ensenso_point_cloud> ();
     disconnect_all_slots<sig_cb_ensenso_images> ();
     disconnect_all_slots<sig_cb_ensenso_point_cloud_images> ();
+    disconnect_all_slots<sig_cb_ensenso_images_rgb> ();
+    disconnect_all_slots<sig_cb_ensenso_point_cloud_images_rgb> ();
 
     if (tcp_open_)
       closeTcpPort ();
@@ -313,34 +319,47 @@ bool pcl::EnsensoGrabber::getCameraInfo(std::string cam, sensor_msgs::CameraInfo
 {
   try
   {
-    cam_info.width = camera_[itmSensor][itmSize][0].asInt();
-    cam_info.height = camera_[itmSensor][itmSize][1].asInt();
+    NxLibItem camera = (cam == "RGB") ? monocam_ : camera_;
+    NxLibItem cameraMat = (cam == "RGB") ? monocam_[itmCalibration][itmCamera] : camera_[itmCalibration][itmDynamic][itmStereo][cam][itmCamera];
+    NxLibItem cameraDist = (cam == "RGB") ? monocam_[itmCalibration][itmDistortion] : camera_[itmCalibration][itmMonocular][cam][itmDistortion];
+
+    cam_info.width = camera[itmSensor][itmSize][0].asInt();
+    cam_info.height = camera[itmSensor][itmSize][1].asInt();
     cam_info.distortion_model = "plumb_bob";
     // Distorsion factors
     cam_info.D.resize(5);
     for(std::size_t i = 0; i < cam_info.D.size(); ++i)
-      cam_info.D[i] = camera_[itmCalibration][itmMonocular][cam][itmDistortion][i].asDouble();
+        cam_info.D[i] = cameraDist[i].asDouble();
     // K and R matrices
     for(std::size_t i = 0; i < 3; ++i)
     {
       for(std::size_t j = 0; j < 3; ++j)
       {
-        cam_info.K[3*i+j] = camera_[itmCalibration][itmMonocular][cam][itmCamera][j][i].asDouble();
-        cam_info.R[3*i+j] = camera_[itmCalibration][itmDynamic][itmStereo][cam][itmRotation][j][i].asDouble();
+        cam_info.K[3*i+j] = cameraMat[j][i].asDouble();
+        if (cam != "RGB")
+        {
+          cam_info.R[3*i+j] = camera[itmCalibration][itmDynamic][itmStereo][cam][itmRotation][j][i].asDouble();
+        }
       }
     }
-    cam_info.P[0] = camera_[itmCalibration][itmDynamic][itmStereo][cam][itmCamera][0][0].asDouble();
-    cam_info.P[1] = camera_[itmCalibration][itmDynamic][itmStereo][cam][itmCamera][1][0].asDouble();
-    cam_info.P[2] = camera_[itmCalibration][itmDynamic][itmStereo][cam][itmCamera][2][0].asDouble();
+    //first row
+    cam_info.P[0] = cameraMat[0][0].asDouble();
+    cam_info.P[1] = cameraMat[1][0].asDouble();
+    cam_info.P[2] = cameraMat[2][0].asDouble();
     cam_info.P[3] = 0.0;
-    cam_info.P[4] = camera_[itmCalibration][itmDynamic][itmStereo][cam][itmCamera][0][1].asDouble();
-    cam_info.P[5] = camera_[itmCalibration][itmDynamic][itmStereo][cam][itmCamera][1][1].asDouble();
-    cam_info.P[6] = camera_[itmCalibration][itmDynamic][itmStereo][cam][itmCamera][2][1].asDouble();
+    //second row
+    cam_info.P[4] = cameraMat[0][1].asDouble();
+    cam_info.P[5] = cameraMat[1][1].asDouble();
+    cam_info.P[6] = cameraMat[2][1].asDouble();
     cam_info.P[7] = 0.0;
+    //third row
+    cam_info.P[8] = 0.0;
+    cam_info.P[9] = 0.0;
     cam_info.P[10] = 1.0;
+    cam_info.P[11] = 0.0;
     if (cam == "Right")
     {
-      double B = camera_[itmCalibration][itmStereo][itmBaseline].asDouble() / 1000.0;
+      double B = camera[itmCalibration][itmStereo][itmBaseline].asDouble() / 1000.0;
       double fx = cam_info.P[0];
       cam_info.P[3] = (-fx * B);
     }
@@ -352,6 +371,48 @@ bool pcl::EnsensoGrabber::getCameraInfo(std::string cam, sensor_msgs::CameraInfo
     return false;
   }
 }
+
+bool pcl::EnsensoGrabber::getTFtoRGB(geometry_msgs::TransformStamped& tf) const
+{
+  if (!use_rgb_ || !mono_device_open_)
+  {
+    return (false);
+  }
+  try {
+    if (monocam_[itmLink][itmTarget].asString() != camera_[itmSerialNumber].asString())
+    {
+      return (false);
+    }
+    NxLibCommand convert(cmdConvertTransformation);
+    convert.parameters()[itmTransformation].setJson(monocam_[itmLink].asJson());
+    convert.execute();
+    Eigen::Affine3d transform;
+    for (int i = 0; i < 4 ; ++i)
+    {
+      for (int j = 0; j < 4 ; ++j)
+      {
+        transform(j,i) = convert.result()[itmTransformation][i][j].asDouble();
+      }
+    }
+    Eigen::Affine3d invTransform = transform.inverse();
+    Eigen::Quaterniond q(invTransform.rotation()); //from stereo to rgb
+    q.normalize();
+    tf.transform.rotation.x = q.x();
+    tf.transform.rotation.y = q.y();
+    tf.transform.rotation.z = q.z();
+    tf.transform.rotation.w = q.w();
+    tf.transform.translation.x = invTransform.translation().x() / 1000.0;
+    tf.transform.translation.y = invTransform.translation().y() / 1000.0;
+    tf.transform.translation.z = invTransform.translation().z() / 1000.0;
+  }
+  catch (NxLibException &ex)
+  {
+    ensensoExceptionHandling (ex, "getTFtoRGB");
+    return (false);
+  }
+  return (true);
+}
+
 
 bool pcl::EnsensoGrabber::getLastCalibrationPattern ( std::vector<int> &grid_size, double &grid_spacing,
                                                       std::vector<Eigen::Vector2d> &left_points,
@@ -545,7 +606,7 @@ bool pcl::EnsensoGrabber::matrixToJson (const Eigen::Affine3d &matrix, std::stri
 }
 
 bool pcl::EnsensoGrabber::openDevice (std::string serial)
-{ 
+{
   if (device_open_)
     PCL_THROW_EXCEPTION (pcl::IOException, "Cannot open multiple devices!");
   PCL_INFO ("Opening Ensenso stereo camera S/N: %s\n", serial.c_str());
@@ -569,7 +630,7 @@ bool pcl::EnsensoGrabber::openDevice (std::string serial)
 }
 
 bool pcl::EnsensoGrabber::openMonoDevice (std::string serial)
-{ 
+{
   if (mono_device_open_)
     PCL_THROW_EXCEPTION (pcl::IOException, "Cannot open multiple devices!");
   PCL_INFO ("Opening Ensenso mono camera S/N: %s\n", serial.c_str());
@@ -615,11 +676,13 @@ void pcl::EnsensoGrabber::processGrabbing ()
     try
     {
       // Publish cloud / images
-      if (num_slots<sig_cb_ensenso_point_cloud> () > 0 || num_slots<sig_cb_ensenso_images> () > 0 || num_slots<sig_cb_ensenso_point_cloud_images> () > 0)
+      if (num_slots<sig_cb_ensenso_point_cloud> () > 0 || num_slots<sig_cb_ensenso_images> () > 0 || num_slots<sig_cb_ensenso_point_cloud_images> () > 0 || num_slots<sig_cb_ensenso_point_cloud_images_rgb> () > 0 || num_slots<sig_cb_ensenso_images_rgb> () > 0)
       {
-        pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud (new pcl::PointCloud<pcl::PointXYZRGB>);
+        pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud (new pcl::PointCloud<pcl::PointXYZRGBA>);
+
         boost::shared_ptr<PairOfImages> rawimages (new PairOfImages);
         boost::shared_ptr<PairOfImages> rectifiedimages (new PairOfImages);
+        boost::shared_ptr<PairOfImages> rgbimages (new PairOfImages);
         // Update FPS
         static double last = pcl::getTime ();
         double now = pcl::getTime ();
@@ -629,6 +692,7 @@ void pcl::EnsensoGrabber::processGrabbing ()
         last = now;
 
         NxLibCommand (cmdCapture).execute ();
+
         double timestamp;
         camera_[itmImages][itmRaw][itmLeft].getBinaryDataInfo (0, 0, 0, 0, 0, &timestamp);
 
@@ -636,7 +700,7 @@ void pcl::EnsensoGrabber::processGrabbing ()
         pattern_mutex_.lock ();
         last_stereo_pattern_ = std::string("");
         pattern_mutex_.unlock ();
-        if (num_slots<sig_cb_ensenso_images> () > 0 || num_slots<sig_cb_ensenso_point_cloud_images> () > 0)
+        if (num_slots<sig_cb_ensenso_images> () > 0 || num_slots<sig_cb_ensenso_point_cloud_images> () > 0 || num_slots<sig_cb_ensenso_images_rgb> () > 0 || num_slots<sig_cb_ensenso_point_cloud_images_rgb> () > 0 )
         {
           // Rectify images
           NxLibCommand (cmdRectifyImages).execute ();
@@ -646,33 +710,51 @@ void pcl::EnsensoGrabber::processGrabbing ()
           // If store_calibration_pattern_ is true, it estimates the pattern pose and store it at last_stereo_pattern_
           if (store_calibration_pattern_)
             discardPatterns();
-          try
+          if(find_pattern_)
           {
-            NxLibCommand collect_pattern (cmdCollectPattern);
-            collect_pattern.parameters ()[itmBuffer].set (store_calibration_pattern_);
-            collect_pattern.parameters ()[itmDecodeData].set (true);
-            collect_pattern.execute ();
-            if (store_calibration_pattern_)
+            try
             {
-              // estimatePatternPose() takes ages, so, we use the raw data
-              // Raw stereo pattern info
-              NxLibCommand get_pattern_buffers (cmdGetPatternBuffers);
-              get_pattern_buffers.execute ();
-              pattern_mutex_.lock ();
-              last_stereo_pattern_ = get_pattern_buffers.result()[itmStereo][0].asJson (true);
-              // Pattern pose
-              estimatePatternPose (last_pattern_pose_, false);
-              pattern_mutex_.unlock ();
+              NxLibCommand collect_pattern (cmdCollectPattern);
+              collect_pattern.parameters ()[itmBuffer].set (store_calibration_pattern_);
+              collect_pattern.parameters ()[itmDecodeData].set (true);
+              collect_pattern.execute ();
+              if (store_calibration_pattern_)
+              {
+                // estimatePatternPose() takes ages, so, we use the raw data
+                // Raw stereo pattern info
+                NxLibCommand get_pattern_buffers (cmdGetPatternBuffers);
+                get_pattern_buffers.execute ();
+                pattern_mutex_.lock ();
+                last_stereo_pattern_ = get_pattern_buffers.result()[itmStereo][0].asJson (true);
+                // Pattern pose
+                estimatePatternPose (last_pattern_pose_, false);
+                pattern_mutex_.unlock ();
+              }
+              collected_pattern = true;
             }
-            collected_pattern = true;
+            catch (const NxLibException &ex)
+            {
+              // if failed to collect the pattern will read the RAW images anyway.
+            }
           }
-          catch (const NxLibException &ex)
+          if (find_pattern_ && collected_pattern)
           {
-            // if failed to collect the pattern will read the RAW images anyway.
-          }
+            monocam_[itmImages][itmWithOverlay].getBinaryDataInfo (&width, &height, &channels, &bpe, &isFlt, 0);
+            rgbimages->first.header.stamp = getPCLStamp (timestamp);
+            rgbimages->first.width = width;
+            rgbimages->first.height = height;
+            rgbimages->first.data.resize (width * height * sizeof(float));
+            rgbimages->first.encoding = getOpenCVType (channels, bpe, isFlt);
+            monocam_[itmImages][itmWithOverlay].getBinaryData (rgbimages->first.data.data (), rgbimages->first.data.size (), 0, 0);
 
-          if (collected_pattern)
-          {
+            monocam_[itmImages][itmRectified].getBinaryDataInfo (&width, &height, &channels, &bpe, &isFlt, 0);
+            rgbimages->second.header.stamp = getPCLStamp (timestamp);
+            rgbimages->second.width = width;
+            rgbimages->second.height = height;
+            rgbimages->second.data.resize (width * height * sizeof(float));
+            rgbimages->second.encoding = getOpenCVType (channels, bpe, isFlt);
+            monocam_[itmImages][itmRectified].getBinaryData (rgbimages->second.data.data (), rgbimages->second.data.size (), 0, 0);
+
             camera_[itmImages][itmWithOverlay][itmLeft].getBinaryDataInfo (&width, &height, &channels, &bpe, &isFlt, 0);
             rawimages->first.header.stamp = rawimages->second.header.stamp = getPCLStamp (timestamp);
             rawimages->first.width = rawimages->second.width = width;
@@ -694,6 +776,24 @@ void pcl::EnsensoGrabber::processGrabbing ()
           }
           else
           {
+            //get RGB raw and rect image
+            monocam_[itmImages][itmRaw].getBinaryDataInfo (&width, &height, &channels, &bpe, &isFlt, 0);
+            rgbimages->first.header.stamp = getPCLStamp (timestamp);
+            rgbimages->first.width = width;
+            rgbimages->first.height = height;
+            rgbimages->first.data.resize (width * height * sizeof(float));
+            rgbimages->first.encoding = getOpenCVType (channels, bpe, isFlt);
+            monocam_[itmImages][itmRaw].getBinaryData (rgbimages->first.data.data (), rgbimages->first.data.size (), 0, 0);
+
+            monocam_[itmImages][itmRectified].getBinaryDataInfo (&width, &height, &channels, &bpe, &isFlt, 0);
+            rgbimages->second.header.stamp = getPCLStamp (timestamp);
+            rgbimages->second.width = width;
+            rgbimages->second.height = height;
+            rgbimages->second.data.resize (width * height * sizeof(float));
+            rgbimages->second.encoding = getOpenCVType (channels, bpe, isFlt);
+            monocam_[itmImages][itmRectified].getBinaryData (rgbimages->second.data.data (), rgbimages->second.data.size (), 0, 0);
+
+            // get left / right raw images
             camera_[itmImages][itmRaw][itmLeft].getBinaryDataInfo (&width, &height, &channels, &bpe, &isFlt, 0);
             rawimages->first.header.stamp = rawimages->second.header.stamp = getPCLStamp (timestamp);
             rawimages->first.width = rawimages->second.width = width;
@@ -716,66 +816,85 @@ void pcl::EnsensoGrabber::processGrabbing ()
         }
 
         // Gather point cloud
-        if (num_slots<sig_cb_ensenso_point_cloud> () > 0 || num_slots<sig_cb_ensenso_point_cloud_images> () > 0)
+        if (num_slots<sig_cb_ensenso_point_cloud> () > 0 || num_slots<sig_cb_ensenso_point_cloud_images> () > 0 || num_slots<sig_cb_ensenso_point_cloud_images_rgb> () > 0)
         {
- 
-  
           // Stereo matching task
           NxLibCommand (cmdComputeDisparityMap).execute ();
-          // NxLibCommand (cmdComputePointMap).execute ();
           // Convert disparity map into XYZ data for each pixel
-          NxLibCommand renderPM (cmdRenderPointMap);
-          renderPM.parameters()[itmCamera].set(monocam_[itmSerialNumber].asString());
-          renderPM.parameters()[itmUseOpenGL].set(true);
-          renderPM.parameters()[itmNear].set(50);
-          renderPM.parameters()[itmFar].set(3000);
-          renderPM.execute ();
+          if (use_rgb_ && mono_device_open_)
+          {
 
-
+            NxLibCommand renderPM (cmdRenderPointMap);
+            renderPM.parameters()[itmCamera].set(monocam_[itmSerialNumber].asString());
+            renderPM.parameters()[itmNear].set(near_plane_);
+            renderPM.parameters()[itmFar].set(far_plane_);
+            renderPM.execute ();
+          }
+          else
+          {
+            NxLibCommand (cmdComputePointMap).execute ();
+          }
           // Get info about the computed point map and copy it into a std::vector
           std::vector<float> pointMap;
           std::vector<char> rgbData;
           int width, height;
 
-          (*root_)[itmImages][itmRenderPointMap].getBinaryDataInfo (&width, &height, 0, 0, 0, 0);
-          (*root_)[itmImages][itmRenderPointMap].getBinaryData (pointMap, 0);
-          // Copy point cloud and convert in meters
+          if (use_rgb_ && mono_device_open_)
+          {
+            (*root_)[itmImages][itmRenderPointMap].getBinaryDataInfo (&width, &height, 0, 0, 0, 0);
+            (*root_)[itmImages][itmRenderPointMap].getBinaryData (pointMap, 0);
+            (*root_)[itmImages][itmRenderPointMapTexture].getBinaryDataInfo (&width, &height, 0, 0, 0, 0);
+            (*root_)[itmImages][itmRenderPointMapTexture].getBinaryData (rgbData, 0);
+          }
+          else
+          {
+            camera_[itmImages][itmPointMap].getBinaryDataInfo (&width, &height, 0, 0, 0, 0);
+            camera_[itmImages][itmPointMap].getBinaryData (pointMap, 0);
+          }
+          // Copy point f and convert in meters
           cloud->header.stamp = getPCLStamp (timestamp);
           cloud->points.resize (height * width);
           cloud->width = width;
           cloud->height = height;
           cloud->is_dense = false;
+
           // Copy data in point cloud (and convert milimeters in meters)
-          NxLibCommand capRGB(cmdCapture);
-          capRGB.parameters()[itmCameras].set(monocam_[itmSerialNumber].asString());
-          capRGB.parameters()[itmOperation].set("New");
-          boost::this_thread::sleep( boost::posix_time::milliseconds(3) ); //try different values
-          capRGB.execute();
-          NxLibCommand recRGB(cmdRectifyImages);
-          recRGB.parameters()[itmCameras].set(monocam_[itmSerialNumber].asString());
-          recRGB.execute();
-          monocam_[itmImages][itmRectified].getBinaryData(rgbData, 0 );
-
-
           for (size_t i = 0; i < pointMap.size (); i += 3)
           {
-            // std::cout << "rgbData: " << rgbData[i] << std::endl;
-
             cloud->points[i / 3].x = pointMap[i] / 1000.0;
             cloud->points[i / 3].y = pointMap[i + 1] / 1000.0;
             cloud->points[i / 3].z = pointMap[i + 2] / 1000.0;
-            cloud->points[i / 3].r = rgbData[i];
-            cloud->points[i / 3].g = rgbData[i+1];
-            cloud->points[i / 3].b = rgbData[i+2];
           }
-        }
+          if (use_rgb_ && mono_device_open_)
+            for (size_t i = 0; i < rgbData.size (); i += 4)
+            {
+              cloud->points[i / 4].r = rgbData[i];
+              cloud->points[i / 4].g = rgbData[i+1];
+              cloud->points[i / 4].b = rgbData[i+2];
+              cloud->points[i / 4].a = rgbData[i+3];
+            }
+          }
         // Publish signals
         if (num_slots<sig_cb_ensenso_point_cloud_images> () > 0)
+        {
           point_cloud_images_signal_->operator () (cloud, rawimages, rectifiedimages);
+        }
         else if (num_slots<sig_cb_ensenso_point_cloud> () > 0)
+        {
           point_cloud_signal_->operator () (cloud);
+        }
         else if (num_slots<sig_cb_ensenso_images> () > 0)
+        {
           images_signal_->operator () (rawimages,rectifiedimages);
+        }
+        else if (num_slots<sig_cb_ensenso_point_cloud_images_rgb> () > 0)
+        {
+          point_cloud_images_signal_rgb_->operator () (cloud, rawimages, rectifiedimages, rgbimages);
+        }
+        else if (num_slots<sig_cb_ensenso_images_rgb> () > 0)
+        {
+          images_signal_rgb_->operator () (rawimages,rectifiedimages, rgbimages);
+        }
       }
       continue_grabbing = running_;
     }
@@ -817,7 +936,35 @@ bool pcl::EnsensoGrabber::restoreDefaultConfiguration () const
   result &= setTargetBrightness();
   result &= setTriggerMode();
   result &= setUseDisparityMapAreaOfInterest();
+  result &= setRGBTriggerDelay();
+  result &= setEnableCUDA();
   return result;
+}
+
+bool pcl::EnsensoGrabber::setEnableCUDA (const bool enable) const
+{
+  try
+  {
+    (*root_)[itmParameters][itmCUDA][itmEnabled].set (enable);
+  }
+  catch (NxLibException &ex)
+  {
+    ensensoExceptionHandling (ex, "setAutoBlackLevel");
+    return (false);
+  }
+  return (true);
+}
+
+bool pcl::EnsensoGrabber::setFindPattern (const bool enable)
+{
+  find_pattern_ = enable;
+  return (true);
+}
+
+bool pcl::EnsensoGrabber::setUseRGB (const bool enable)
+{
+  use_rgb_ = enable;
+  return (true);
 }
 
 bool pcl::EnsensoGrabber::setAutoBlackLevel (const bool enable) const
@@ -903,7 +1050,7 @@ bool pcl::EnsensoGrabber::setBlackLevelOffset (const float offset) const
 
 bool pcl::EnsensoGrabber::setExposure (const float exposure) const
 {
-if (!device_open_)
+  if (!device_open_)
     return (false);
   try
   {
@@ -919,7 +1066,7 @@ if (!device_open_)
 
 bool pcl::EnsensoGrabber::setFlexView (const bool enable, const int imagepairs) const
 {
-if (!device_open_)
+  if (!device_open_)
     return (false);
   try
   {
@@ -939,7 +1086,7 @@ if (!device_open_)
 
 bool pcl::EnsensoGrabber::setFrontLight (const bool enable) const
 {
-if (!device_open_)
+  if (!device_open_)
     return (false);
   try
   {
@@ -955,7 +1102,7 @@ if (!device_open_)
 
 bool pcl::EnsensoGrabber::setGain (const float gain) const
 {
-if (!device_open_)
+  if (!device_open_)
     return (false);
   try
   {
@@ -971,7 +1118,7 @@ if (!device_open_)
 
 bool pcl::EnsensoGrabber::setGainBoost (const bool enable) const
 {
-if (!device_open_)
+  if (!device_open_)
     return (false);
   try
   {
@@ -987,8 +1134,6 @@ if (!device_open_)
 
 bool pcl::EnsensoGrabber::setGridSpacing (const double grid_spacing) const
 {
-if (!device_open_)
-    return (false);
   try
   {
     (*root_)[itmParameters][itmPattern][itmGridSpacing].set (grid_spacing);
@@ -1003,7 +1148,7 @@ if (!device_open_)
 
 bool pcl::EnsensoGrabber::setHardwareGamma (const bool enable) const
 {
-if (!device_open_)
+  if (!device_open_)
     return (false);
   try
   {
@@ -1019,7 +1164,7 @@ if (!device_open_)
 
 bool pcl::EnsensoGrabber::setHdr (const bool enable) const
 {
-if (!device_open_)
+  if (!device_open_)
     return (false);
   try
   {
@@ -1035,7 +1180,7 @@ if (!device_open_)
 
 bool pcl::EnsensoGrabber::setMinimumDisparity (const int disparity) const
 {
-if (!device_open_)
+  if (!device_open_)
     return (false);
   try
   {
@@ -1051,7 +1196,7 @@ if (!device_open_)
 
 bool pcl::EnsensoGrabber::setNumberOfDisparities (const int number) const
 {
-if (!device_open_)
+  if (!device_open_)
     return (false);
   try
   {
@@ -1067,7 +1212,7 @@ if (!device_open_)
 
 bool pcl::EnsensoGrabber::setOptimizationProfile (const std::string profile) const
 {
-if (!device_open_)
+  if (!device_open_)
     return (false);
   try
   {
@@ -1083,7 +1228,7 @@ if (!device_open_)
 
 bool pcl::EnsensoGrabber::setPixelClock (const int pixel_clock) const
 {
-if (!device_open_)
+  if (!device_open_)
     return (false);
   try
   {
@@ -1099,7 +1244,7 @@ if (!device_open_)
 
 bool pcl::EnsensoGrabber::setProjector (const bool enable) const
 {
-if (!device_open_)
+  if (!device_open_)
     return (false);
   try
   {
@@ -1115,7 +1260,7 @@ if (!device_open_)
 
 bool pcl::EnsensoGrabber::setTargetBrightness (const int target) const
 {
-if (!device_open_)
+  if (!device_open_)
     return (false);
   try
   {
@@ -1131,7 +1276,7 @@ if (!device_open_)
 
 bool pcl::EnsensoGrabber::setScaling (const float scaling) const
 {
-if (!device_open_)
+  if (!device_open_)
     return (false);
   try
   {
@@ -1147,7 +1292,7 @@ if (!device_open_)
 
 bool pcl::EnsensoGrabber::setTriggerMode (const std::string mode) const
 {
-if (!device_open_)
+  if (!device_open_)
     return (false);
   try
   {
@@ -1160,6 +1305,29 @@ if (!device_open_)
   }
   return (true);
 }
+
+bool pcl::EnsensoGrabber::setRGBTriggerDelay (const float delay) const
+{
+  if (!use_rgb_)
+  {
+    return (true);
+  }
+  if (!mono_device_open_)
+  {
+    return (false);
+  }
+  try {
+  monocam_[itmParameters][itmCapture][itmTriggerDelay] = delay;
+  }
+  catch (NxLibException &ex) {
+    ensensoExceptionHandling (ex, "setRGBTriggerDelay");
+    return (false);
+  }
+  return (true);
+}
+
+
+
 
 bool pcl::EnsensoGrabber::setUseDisparityMapAreaOfInterest (const bool enable) const
 {
@@ -1321,13 +1489,41 @@ bool pcl::EnsensoGrabber::setFillRegionSize(const int regionsize) const
   return (true);
 }
 
+bool pcl::EnsensoGrabber::setSurfaceConnectivity(const int threshold) const
+{
+  if (!device_open_)
+    return (false);
+  try
+  {
+    camera_[itmParameters][itmDisparityMap][itmPostProcessing][itmFilling][itmRegionSize].set (threshold);
+  }
+  catch (NxLibException &ex)
+  {
+    ensensoExceptionHandling (ex, "setSurfaceConnectivity");
+    return (false);
+  }
+  return (true);
+}
+
+bool pcl::EnsensoGrabber::setNearPlane(const int near)
+{
+  near_plane_ = near;
+  return (true);
+}
+
+bool pcl::EnsensoGrabber::setFarPlane(const int far)
+{
+  far_plane_ = far;
+  return (true);
+}
+
 void pcl::EnsensoGrabber::start ()
 {
   if (isRunning ())
     return;
   if (!device_open_)
     openDevice (0);
-  if(!mono_device_open_)
+  if(use_rgb_ && !mono_device_open_)
     openMonoDevice (0);
   fps_ = 0.0;
   running_ = true;
