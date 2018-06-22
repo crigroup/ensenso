@@ -638,7 +638,7 @@ bool pcl::EnsensoGrabber::openMonoDevice (std::string serial)
   {
     // Create a pointer referencing the camera's tree item, for easier access:
     monocam_ = (*root_)[itmCameras][itmBySerialNo][serial];
-    if (!camera_.exists () || monocam_[itmType] != valMonocular)
+    if (!monocam_.exists () || monocam_[itmType] != valMonocular)
       PCL_THROW_EXCEPTION (pcl::IOException, "Please connect a single mono camera to your computer!");
     NxLibCommand open (cmdOpen);
     open.parameters ()[itmCameras] = monocam_[itmSerialNumber].asString ();
@@ -646,7 +646,7 @@ bool pcl::EnsensoGrabber::openMonoDevice (std::string serial)
   }
   catch (NxLibException &ex)
   {
-    ensensoExceptionHandling (ex, "openDevice");
+    ensensoExceptionHandling (ex, "openMonoDevice");
     return (false);
   }
   mono_device_open_ = true;
@@ -699,7 +699,7 @@ void pcl::EnsensoGrabber::processGrabbing ()
                 retrieve.parameters()[itmTimeout] = 1000;   // to wait copy image
                 retrieve.execute();
                 bool retrievedIR = retrieve.result()[camera_[itmSerialNumber].asString().c_str()][itmRetrieved].asBool();
-                bool retrievedRGB = retrieve.result()[monocam_[itmSerialNumber].asString().c_str()][itmRetrieved].asBool();
+                bool retrievedRGB = use_rgb_ ? retrieve.result()[monocam_[itmSerialNumber].asString().c_str()][itmRetrieved].asBool() : true;
                 if (retrievedIR && retrievedRGB)
                 {
                   break;
@@ -759,22 +759,24 @@ void pcl::EnsensoGrabber::processGrabbing ()
           }
           if (find_pattern_ && collected_pattern)
           {
-            monocam_[itmImages][itmWithOverlay].getBinaryDataInfo (&width, &height, &channels, &bpe, &isFlt, 0);
-            rgbimages->first.header.stamp = getPCLStamp (timestamp);
-            rgbimages->first.width = width;
-            rgbimages->first.height = height;
-            rgbimages->first.data.resize (width * height * sizeof(float));
-            rgbimages->first.encoding = getOpenCVType (channels, bpe, isFlt);
-            monocam_[itmImages][itmWithOverlay].getBinaryData (rgbimages->first.data.data (), rgbimages->first.data.size (), 0, 0);
+            if (use_rgb_)
+            {
+              monocam_[itmImages][itmWithOverlay].getBinaryDataInfo (&width, &height, &channels, &bpe, &isFlt, 0);
+              rgbimages->first.header.stamp = getPCLStamp (timestamp);
+              rgbimages->first.width = width;
+              rgbimages->first.height = height;
+              rgbimages->first.data.resize (width * height * sizeof(float));
+              rgbimages->first.encoding = getOpenCVType (channels, bpe, isFlt);
+              monocam_[itmImages][itmWithOverlay].getBinaryData (rgbimages->first.data.data (), rgbimages->first.data.size (), 0, 0);
 
-            monocam_[itmImages][itmRectified].getBinaryDataInfo (&width, &height, &channels, &bpe, &isFlt, 0);
-            rgbimages->second.header.stamp = getPCLStamp (timestamp);
-            rgbimages->second.width = width;
-            rgbimages->second.height = height;
-            rgbimages->second.data.resize (width * height * sizeof(float));
-            rgbimages->second.encoding = getOpenCVType (channels, bpe, isFlt);
-            monocam_[itmImages][itmRectified].getBinaryData (rgbimages->second.data.data (), rgbimages->second.data.size (), 0, 0);
-
+              monocam_[itmImages][itmRectified].getBinaryDataInfo (&width, &height, &channels, &bpe, &isFlt, 0);
+              rgbimages->second.header.stamp = getPCLStamp (timestamp);
+              rgbimages->second.width = width;
+              rgbimages->second.height = height;
+              rgbimages->second.data.resize (width * height * sizeof(float));
+              rgbimages->second.encoding = getOpenCVType (channels, bpe, isFlt);
+              monocam_[itmImages][itmRectified].getBinaryData (rgbimages->second.data.data (), rgbimages->second.data.size (), 0, 0);
+            }
             camera_[itmImages][itmWithOverlay][itmLeft].getBinaryDataInfo (&width, &height, &channels, &bpe, &isFlt, 0);
             rawimages->first.header.stamp = rawimages->second.header.stamp = getPCLStamp (timestamp);
             rawimages->first.width = rawimages->second.width = width;
@@ -796,23 +798,25 @@ void pcl::EnsensoGrabber::processGrabbing ()
           }
           else
           {
-            //get RGB raw and rect image
-            monocam_[itmImages][itmRaw].getBinaryDataInfo (&width, &height, &channels, &bpe, &isFlt, 0);
-            rgbimages->first.header.stamp = getPCLStamp (timestamp);
-            rgbimages->first.width = width;
-            rgbimages->first.height = height;
-            rgbimages->first.data.resize (width * height * sizeof(float));
-            rgbimages->first.encoding = getOpenCVType (channels, bpe, isFlt);
-            monocam_[itmImages][itmRaw].getBinaryData (rgbimages->first.data.data (), rgbimages->first.data.size (), 0, 0);
+            if (use_rgb_)
+            {
+              //get RGB raw and rect image
+              monocam_[itmImages][itmRaw].getBinaryDataInfo (&width, &height, &channels, &bpe, &isFlt, 0);
+              rgbimages->first.header.stamp = getPCLStamp (timestamp);
+              rgbimages->first.width = width;
+              rgbimages->first.height = height;
+              rgbimages->first.data.resize (width * height * sizeof(float));
+              rgbimages->first.encoding = getOpenCVType (channels, bpe, isFlt);
+              monocam_[itmImages][itmRaw].getBinaryData (rgbimages->first.data.data (), rgbimages->first.data.size (), 0, 0);
 
-            monocam_[itmImages][itmRectified].getBinaryDataInfo (&width, &height, &channels, &bpe, &isFlt, 0);
-            rgbimages->second.header.stamp = getPCLStamp (timestamp);
-            rgbimages->second.width = width;
-            rgbimages->second.height = height;
-            rgbimages->second.data.resize (width * height * sizeof(float));
-            rgbimages->second.encoding = getOpenCVType (channels, bpe, isFlt);
-            monocam_[itmImages][itmRectified].getBinaryData (rgbimages->second.data.data (), rgbimages->second.data.size (), 0, 0);
-
+              monocam_[itmImages][itmRectified].getBinaryDataInfo (&width, &height, &channels, &bpe, &isFlt, 0);
+              rgbimages->second.header.stamp = getPCLStamp (timestamp);
+              rgbimages->second.width = width;
+              rgbimages->second.height = height;
+              rgbimages->second.data.resize (width * height * sizeof(float));
+              rgbimages->second.encoding = getOpenCVType (channels, bpe, isFlt);
+              monocam_[itmImages][itmRectified].getBinaryData (rgbimages->second.data.data (), rgbimages->second.data.size (), 0, 0);
+            }
             // get left / right raw images
             camera_[itmImages][itmRaw][itmLeft].getBinaryDataInfo (&width, &height, &channels, &bpe, &isFlt, 0);
             rawimages->first.header.stamp = rawimages->second.header.stamp = getPCLStamp (timestamp);
@@ -1337,7 +1341,7 @@ bool pcl::EnsensoGrabber::setRGBTriggerDelay (const float delay) const
     return (false);
   }
   try {
-  monocam_[itmParameters][itmCapture][itmTriggerDelay] = delay;
+    monocam_[itmParameters][itmCapture][itmTriggerDelay] = delay;
   }
   catch (NxLibException &ex) {
     ensensoExceptionHandling (ex, "setRGBTriggerDelay");
@@ -1345,9 +1349,6 @@ bool pcl::EnsensoGrabber::setRGBTriggerDelay (const float delay) const
   }
   return (true);
 }
-
-
-
 
 bool pcl::EnsensoGrabber::setUseDisparityMapAreaOfInterest (const bool enable) const
 {
