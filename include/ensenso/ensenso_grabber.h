@@ -10,6 +10,7 @@
 #include <pcl/io/grabber.h>
 #include <pcl/common/synchronizer.h>
 // Others
+#include <boost/thread.hpp>
 #include <sensor_msgs/CameraInfo.h>
 #include <geometry_msgs/TransformStamped.h>
 // Ensenso SDK
