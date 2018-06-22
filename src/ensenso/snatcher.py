@@ -13,29 +13,26 @@ try:
 except ImportError:
   raise Exception('pcl python biddings not found: https://github.com/strawlab/python-pcl')
 # Messages
-from sensor_msgs.msg import (
-  Image, 
-  PointCloud2
-)
+from sensor_msgs.msg import CameraInfo, Image, PointCloud2
 
 
 class EnsensoDriverReconfigure():
   def __init__(self, namespace='/', timeout=30):
     ns = criros.utils.solve_namespace(namespace)
     self.dynclient = dynamic_reconfigure.client.Client(ns+'ensenso_driver', timeout=timeout, config_callback=self.cb_dynresponse)
-  
+
   def cb_dynresponse(self, config):
     """
     TODO: Check that the configuration succeeded.
     """
     pass
-  
+
   def get_configuration(self, timeout=None):
     return self.dynclient.get_configuration(timeout=timeout)
-  
+
   def update_configuration(self, config):
     return self.dynclient.update_configuration(config)
-  
+
   def enable_lights(self, projector=False, frontlight=False):
     """
     Switches on/off the projector and/or the frontlight
@@ -45,7 +42,7 @@ class EnsensoDriverReconfigure():
     @param frontlight: Switch on/off the frontlight
     """
     self.dynclient.update_configuration({'Projector':projector, 'FrontLight':frontlight})
-  
+
   def enable_streaming(self, cloud=False, images=False):
     """
     Enable/disable the streaming of the point cloud and/or the images
@@ -59,7 +56,7 @@ class EnsensoDriverReconfigure():
 
 class Snatcher(object):
   """
-  Class to 'snatch' images and cloud from the ensenso camera. It subscribes to the camera 
+  Class to 'snatch' images and cloud from the ensenso camera. It subscribes to the camera
   topics and connects to the dynamic reconfiguration server to start/stop streaming and
   to switch on/off the projector and frontlight.
   """
@@ -78,24 +75,41 @@ class Snatcher(object):
     self.use_cv_types = use_cv_types
     self.bridge = CvBridge()
     self.cv_type = 'mono8'
-    self.exposure_time = 1.5
     # Setup publishers and subscribers
     self.reset_snapshots()
-    rospy.Subscriber('left/image_raw', Image, self.cb_raw_left, queue_size=1)
-    rospy.Subscriber('right/image_raw', Image, self.cb_raw_right, queue_size=1)
-    rospy.Subscriber('left/image_rect', Image, self.cb_rect_left, queue_size=1)
-    rospy.Subscriber('right/image_rect', Image, self.cb_rect_right, queue_size=1)
-    rospy.Subscriber('depth/points', PointCloud2, self.cb_point_cloud, queue_size=1)
+    self.info_left = None
+    self.info_right = None
+    topics = []
+    topics.append(['left/camera_info', CameraInfo, self.cb_info_left])
+    topics.append(['right/camera_info', CameraInfo, self.cb_info_right])
+    topics.append(['left/image_raw', Image, self.cb_raw_left])
+    topics.append(['right/image_raw', Image, self.cb_raw_right])
+    topics.append(['left/image_rect', Image, self.cb_rect_left])
+    topics.append(['right/image_rect', Image, self.cb_rect_right])
+    topics.append(['depth/points', PointCloud2, self.cb_point_cloud])
+    self.subscribers = dict()
+    for name,ttype,callback in topics:
+      self.subscribers[name] = rospy.Subscriber(name, ttype, callback,
+                                                                  queue_size=1)
     # Camera configuration client
     self.dynclient = EnsensoDriverReconfigure(namespace=rospy.get_namespace())
+    rospy.on_shutdown(self.cb_shutdown)
     self.initialized = True
-  
+
   def cb_dynresponse(self, config):
     """
     TODO: Check that the configuration succeeded.
     """
     pass
-  
+
+  def cb_info_left(self, msg):
+    self.info_left = copy.deepcopy(msg)
+    self.subscribers['left/camera_info'].unregister()
+
+  def cb_info_right(self, msg):
+    self.info_right = copy.deepcopy(msg)
+    self.subscribers['right/camera_info'].unregister()
+
   def cb_point_cloud(self, msg):
     """
     Callback executed every time a point cloud is received
@@ -104,7 +118,7 @@ class Snatcher(object):
     """
     self.point_cloud = msg
     self.headers['point_cloud'] = copy.deepcopy(msg.header)
-  
+
   def cb_raw_left(self, msg):
     """
     Callback executed every time a left raw image is received
@@ -120,7 +134,7 @@ class Snatcher(object):
         self.raw_left = None
     else:
       self.raw_left = msg
-  
+
   def cb_raw_right(self, msg):
     """
     Callback executed every time a right raw image is received
@@ -136,7 +150,7 @@ class Snatcher(object):
         self.raw_right = None
     else:
       self.raw_right = msg
-  
+
   def cb_rect_left(self, msg):
     """
     Callback executed every time a left rectified image is received
@@ -152,7 +166,7 @@ class Snatcher(object):
         self.rect_left = None
     else:
       self.rect_left = msg
-  
+
   def cb_rect_right(self, msg):
     """
     Callback executed every time a right raw image is received
@@ -168,7 +182,11 @@ class Snatcher(object):
         self.rect_right = None
     else:
       self.rect_right = msg
-  
+
+  def cb_shutdown(self):
+    for sub in self.subscribers.values():
+      sub.unregister()
+
   def enable_lights(self, projector=False, frontlight=False):
     """
     Switches on/off the projector and/or the frontlight
@@ -177,8 +195,9 @@ class Snatcher(object):
     @type  frontlight: bool
     @param frontlight: Switch on/off the frontlight
     """
-    self.dynclient.update_configuration({'Projector':projector, 'FrontLight':frontlight})
-  
+    self.dynclient.update_configuration({'Projector':projector,
+                                                      'FrontLight':frontlight})
+
   def enable_streaming(self, cloud=False, images=False):
     """
     Enable/disable the streaming of the point cloud and/or the images
@@ -188,13 +207,13 @@ class Snatcher(object):
     @param images: Enable/disable the streaming of the images
     """
     self.dynclient.update_configuration({'Cloud':cloud, 'Images':images})
-  
+
   def execute(self):
     """
     Virtual method where to put the overloaded code.
     """
     raise Exception('Unimplemented method. Please overload it.')
-  
+
   def has_cloud(self):
     """
     Checks if we snatched a point cloud
@@ -202,7 +221,21 @@ class Snatcher(object):
     @return: True if successful, false otherwise
     """
     return (self.point_cloud is not None)
-  
+
+  def has_camera_info(self):
+    return ((self.info_left is not None) and (self.info_right is not None))
+
+  def has_rectified_images(self):
+    """
+    Checks if we snatched the rectified images
+
+    Returns
+    -------
+    result: bool
+      True if successful, false otherwise
+    """
+    return (self.rect_left is not None) and (self.rect_right is not None)
+
   def has_images(self):
     """
     Checks if we snatched the raw and rect images
@@ -210,9 +243,8 @@ class Snatcher(object):
     @return: True if successful, false otherwise
     """
     has_raw = (self.raw_left is not None) and (self.raw_right is not None)
-    has_rect =(self.rect_left is not None) and (self.rect_right is not None)
-    return (has_raw and has_rect)
-  
+    return (has_raw and self.has_rectified_images())
+
   def has_images_and_cloud(self):
     """
     Checks if we snatched the point cloud, the raw and rect images
@@ -220,7 +252,7 @@ class Snatcher(object):
     @return: True if successful, false otherwise
     """
     return ( self.has_cloud() and self.has_images() )
-  
+
   def reset_snapshots(self):
     """
     Resets the snatched information
@@ -231,18 +263,18 @@ class Snatcher(object):
     self.raw_right = None
     self.rect_left = None
     self.rect_right = None
-  
+
   def stop_streaming(self):
     self.enable_lights(projector=False, frontlight=False)
     self.enable_streaming(cloud=False, images=False)
-  
+
   def take_snapshot(self, exposure_time, success_fn, check_interval=1/30.):
     """
     Wait until we have snatched the information encoded in C{success_fn}
     @rtype: bool
     @return: True if successful, false otherwise
     """
-    exposure_time = max( 0.001, exposure_time )
+    exposure_time = max(0.001, exposure_time)
     rospy.sleep(exposure_time)
     self.reset_snapshots()
     while not success_fn():

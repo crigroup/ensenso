@@ -59,6 +59,7 @@ class EnsensoDriver
     bool                              is_streaming_images_;
     bool                              is_streaming_rgb_;
     bool                              stream_calib_pattern_;
+    int                               trigger_mode_;
     // TF
     std::string                       camera_frame_id_;
     std::string                       rgb_camera_frame_id_;
@@ -71,6 +72,7 @@ class EnsensoDriver
      EnsensoDriver():
       is_streaming_images_(false),
       is_streaming_cloud_(false),
+      trigger_mode_(-1),
       is_streaming_rgb_(false),
       nh_private_("~")
     {
@@ -297,7 +299,7 @@ class EnsensoDriver
       //CUDA parameter
       ensenso_ptr_->setEnableCUDA(config.EnableCUDA);
       // Streaming parameters
-      configureStreaming(config.Cloud, config.Images, config.RGB);
+      configureStreaming(config.Cloud, config.Images, config.RGB, config.TriggerMode);
     }
 
     bool collectPatternCB(ensenso::CollectPattern::Request& req, ensenso::CollectPattern::Response &res)
@@ -341,65 +343,75 @@ class EnsensoDriver
       return true;
     }
 
-    bool configureStreaming(const bool cloud, const bool images, const bool rgb)
+    bool configureStreaming(const bool cloud, const bool images, const int rgb, const int trigger_mode)
     {
-      if ((is_streaming_cloud_ == cloud) && (is_streaming_images_ == images) && (is_streaming_rgb_ == rgb))
-        return true;  // Nothing to be done here
-      is_streaming_cloud_ = cloud;
-      is_streaming_images_ = images;
-      is_streaming_rgb_ = rgb;
       bool was_running = ensenso_ptr_->isRunning();
-      if (was_running)
-        ensenso_ptr_->stop();
-      // Disconnect previous connection
-      connection_.disconnect();
-      // Connect new signals
-      if (cloud && images)
+      if ((is_streaming_cloud_ != cloud) || (is_streaming_images_ != images) || (is_streaming_rgb_ != rgb))
       {
-        if (rgb)
+        is_streaming_cloud_ = cloud;
+        is_streaming_images_ = images;
+        is_streaming_rgb_ = rgb;
+        if (was_running)
+          ensenso_ptr_->stop();
+        // Disconnect previous connection
+        connection_.disconnect();
+        // Connect new signals
+        if (cloud && images)
+        {
+          if (rgb)
+          {
+            boost::function<void(
+              const boost::shared_ptr<PointCloudXYZRGBA>&,
+              const boost::shared_ptr<PairOfImages>&,
+              const boost::shared_ptr<PairOfImages>&,
+              const boost::shared_ptr<PairOfImages>&)> f = boost::bind (&EnsensoDriver::cloudImagesRGBCallback, this, _1, _2, _3, _4);
+            connection_ = ensenso_ptr_->registerCallback(f);
+          }
+          else
+          {
+            boost::function<void(
+              const boost::shared_ptr<PointCloudXYZRGBA>&,
+              const boost::shared_ptr<PairOfImages>&,
+              const boost::shared_ptr<PairOfImages>&)> f = boost::bind (&EnsensoDriver::cloudImagesCallback, this, _1, _2, _3);
+            connection_ = ensenso_ptr_->registerCallback(f);
+          }
+        }
+        else if (images)
+        {
+          if(rgb)
+          {
+            boost::function<void(
+              const boost::shared_ptr<PairOfImages>&,
+              const boost::shared_ptr<PairOfImages>&,
+              const boost::shared_ptr<PairOfImages>&)> f = boost::bind (&EnsensoDriver::imagesRGBCallback, this, _1, _2, _3);
+            connection_ = ensenso_ptr_->registerCallback(f);
+          }
+          else
+          {
+            boost::function<void(
+              const boost::shared_ptr<PairOfImages>&,
+              const boost::shared_ptr<PairOfImages>&)> f = boost::bind (&EnsensoDriver::imagesCallback, this, _1, _2);
+            connection_ = ensenso_ptr_->registerCallback(f);
+          }
+        }
+        else if (cloud)
         {
           boost::function<void(
-            const boost::shared_ptr<PointCloudXYZRGBA>&,
-            const boost::shared_ptr<PairOfImages>&,
-            const boost::shared_ptr<PairOfImages>&,
-            const boost::shared_ptr<PairOfImages>&)> f = boost::bind (&EnsensoDriver::cloudImagesRGBCallback, this, _1, _2, _3, _4);
+              const boost::shared_ptr<PointCloudXYZRGBA>&)> f = boost::bind (&EnsensoDriver::cloudCallback, this, _1);
           connection_ = ensenso_ptr_->registerCallback(f);
         }
-        else
+        if (was_running)
+          ensenso_ptr_->start();
+      }
+      else if (trigger_mode_ != trigger_mode)
+      {
+        trigger_mode_ = trigger_mode;
+        if (was_running)
         {
-          boost::function<void(
-            const boost::shared_ptr<PointCloudXYZRGBA>&,
-            const boost::shared_ptr<PairOfImages>&,
-            const boost::shared_ptr<PairOfImages>&)> f = boost::bind (&EnsensoDriver::cloudImagesCallback, this, _1, _2, _3);
-          connection_ = ensenso_ptr_->registerCallback(f);
+          ensenso_ptr_->stop();
+          ensenso_ptr_->start();
         }
       }
-      else if (images)
-      {
-        if (rgb)
-        {
-          boost::function<void(
-            const boost::shared_ptr<PairOfImages>&,
-            const boost::shared_ptr<PairOfImages>&,
-            const boost::shared_ptr<PairOfImages>&)> f = boost::bind (&EnsensoDriver::imagesRGBCallback, this, _1, _2, _3);
-          connection_ = ensenso_ptr_->registerCallback(f);
-        }
-        else
-        {
-          boost::function<void(
-            const boost::shared_ptr<PairOfImages>&,
-            const boost::shared_ptr<PairOfImages>&)> f = boost::bind (&EnsensoDriver::imagesCallback, this, _1, _2);
-          connection_ = ensenso_ptr_->registerCallback(f);
-        }
-      }
-      else if (cloud)
-      {
-        boost::function<void(
-            const boost::shared_ptr<PointCloudXYZRGBA>&)> f = boost::bind (&EnsensoDriver::cloudCallback, this, _1);
-        connection_ = ensenso_ptr_->registerCallback(f);
-      }
-      if (was_running)
-        ensenso_ptr_->start();
       return true;
     }
 

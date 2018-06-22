@@ -691,7 +691,27 @@ void pcl::EnsensoGrabber::processGrabbing ()
         fps_mutex_.unlock ();
         last = now;
 
-        NxLibCommand (cmdCapture).execute ();
+        NxLibCommand (cmdTrigger).execute();
+        NxLibCommand retrieve(cmdRetrieve);
+        while (running_)
+        {
+            try {
+                retrieve.parameters()[itmTimeout] = 1000;   // to wait copy image
+                retrieve.execute();
+                bool retrievedIR = retrieve.result()[camera_[itmSerialNumber].asString().c_str()][itmRetrieved].asBool();
+                bool retrievedRGB = retrieve.result()[monocam_[itmSerialNumber].asString().c_str()][itmRetrieved].asBool();
+                if (retrievedIR && retrievedRGB)
+                {
+                  break;
+                }
+            }
+            catch (const NxLibException &ex) {
+                // To ignore timeout exception and others
+            }
+        }
+        if (!running_) {
+            return;
+        }
 
         double timestamp;
         camera_[itmImages][itmRaw][itmLeft].getBinaryDataInfo (0, 0, 0, 0, 0, &timestamp);
