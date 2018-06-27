@@ -661,14 +661,18 @@ class EnsensoDriver
       unsigned char *image_array = reinterpret_cast<unsigned char *>(&pcl_image.data[0]);
       int type(CV_8UC1);
       std::string encoding("mono8");
+      std_msgs::Header header;
       if (pcl_image.encoding == "CV_8UC3")
       {
         type = CV_8UC3;
         encoding = "rgb8";
+        header.frame_id = rgb_camera_frame_id_;
+      }
+      else
+      {
+        header.frame_id = camera_frame_id_;
       }
       cv::Mat image_mat(pcl_image.height, pcl_image.width, type, image_array);
-      std_msgs::Header header;
-      header.frame_id = camera_frame_id_;
       header.stamp = now;
       return cv_bridge::CvImage(header, encoding, image_mat).toImageMsg();
     }

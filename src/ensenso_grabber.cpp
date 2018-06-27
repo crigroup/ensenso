@@ -969,11 +969,18 @@ bool pcl::EnsensoGrabber::setEnableCUDA (const bool enable) const
 {
   try
   {
-    (*root_)[itmParameters][itmCUDA][itmEnabled].set (enable);
+    if ((*root_)[itmParameters][itmCUDA].exists())
+    {
+      (*root_)[itmParameters][itmCUDA][itmEnabled].set (enable);
+    }
+    else
+    {
+      PCL_WARN("CUDA support requires Ensenso SDK version >=2.1.7.");
+    }
   }
   catch (NxLibException &ex)
   {
-    ensensoExceptionHandling (ex, "setAutoBlackLevel");
+    ensensoExceptionHandling (ex, "setEnableCUDA");
     return (false);
   }
   return (true);
