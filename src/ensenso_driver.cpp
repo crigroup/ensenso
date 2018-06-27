@@ -116,7 +116,7 @@ class EnsensoDriver
       ensenso_ptr_->openDevice(serial);
       if (use_rgb_)
       {
-        ensenso_ptr_->openMonoDevice(serial);
+        ensenso_ptr_->openMonoDevice(monoserial);
       }
       ensenso_ptr_->openTcpPort();
       ensenso_ptr_->storeCalibrationPattern(stream_calib_pattern_);
