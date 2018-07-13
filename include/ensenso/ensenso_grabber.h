@@ -40,17 +40,20 @@ public:
     (sig_cb_ensenso_point_cloud)(const pcl::PointCloud<pcl::PointXYZRGBA>::Ptr &);
 
     typedef void
-    (sig_cb_ensenso_images)(const boost::shared_ptr<PairOfImages> &,const boost::shared_ptr<PairOfImages> &);
+    (sig_cb_ensenso_images)(const boost::shared_ptr<PairOfImages> &,const boost::shared_ptr<PairOfImages> &,
+                            const boost::shared_ptr<pcl::PCLImage> &);
 
     typedef void
     (sig_cb_ensenso_point_cloud_images)(const pcl::PointCloud<pcl::PointXYZRGBA>::Ptr &,
-                                        const boost::shared_ptr<PairOfImages> &,const boost::shared_ptr<PairOfImages> &);
+                                        const boost::shared_ptr<PairOfImages> &,const boost::shared_ptr<PairOfImages> &,
+                                        const boost::shared_ptr<pcl::PCLImage> &);
     typedef void
     (sig_cb_ensenso_images_rgb)(const boost::shared_ptr<PairOfImages> &,const boost::shared_ptr<PairOfImages> &,
-                                const boost::shared_ptr<PairOfImages> &);
+                                const boost::shared_ptr<PairOfImages> &, const boost::shared_ptr<pcl::PCLImage> &);
     typedef void
     (sig_cb_ensenso_point_cloud_images_rgb)(const pcl::PointCloud<pcl::PointXYZRGBA>::Ptr &,
-                                            const boost::shared_ptr<PairOfImages> &,const boost::shared_ptr<PairOfImages> &, const boost::shared_ptr<PairOfImages> &);
+                                            const boost::shared_ptr<PairOfImages> &,const boost::shared_ptr<PairOfImages> &,
+                                            const boost::shared_ptr<PairOfImages> &, const boost::shared_ptr<pcl::PCLImage> &);
     /** @endcond */
     
     /** @brief Constructor */
@@ -131,6 +134,7 @@ public:
      * @note At least one calibration pattern must have been collected before, use collectPattern() before */
     bool estimatePatternPose (Eigen::Affine3d &pose, const bool average=false) const;
     
+    float findMaxNoNaN (std::vector<float> vec) const;
     /** @brief Get class name
      * @returns A string containing the class name */
     std::string getName () const;

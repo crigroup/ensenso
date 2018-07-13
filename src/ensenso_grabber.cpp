@@ -315,6 +315,16 @@ int pcl::EnsensoGrabber::enumDevices () const
   return (camera_count);
 }
 
+bool compareNoNaN (float x, float y)
+{
+  return x < y ? true : std::isnan(x);
+}
+
+float pcl::EnsensoGrabber::findMaxNoNaN (std::vector<float> vec) const
+{
+  return *std::max_element(vec.begin(), vec.end(), compareNoNaN);
+}
+
 bool pcl::EnsensoGrabber::getCameraInfo(std::string cam, sensor_msgs::CameraInfo &cam_info) const
 {
   try
@@ -683,6 +693,7 @@ void pcl::EnsensoGrabber::processGrabbing ()
         boost::shared_ptr<PairOfImages> rawimages (new PairOfImages);
         boost::shared_ptr<PairOfImages> rectifiedimages (new PairOfImages);
         boost::shared_ptr<PairOfImages> rgbimages (new PairOfImages);
+        boost::shared_ptr<pcl::PCLImage> depthimage (new pcl::PCLImage);
         // Update FPS
         static double last = pcl::getTime ();
         double now = pcl::getTime ();
@@ -861,18 +872,18 @@ void pcl::EnsensoGrabber::processGrabbing ()
           // Get info about the computed point map and copy it into a std::vector
           std::vector<float> pointMap;
           std::vector<char> rgbData;
-          int width, height;
-
+          int width, height, bpe;
+          bool isFlt;
           if (use_rgb_ && mono_device_open_)
           {
-            (*root_)[itmImages][itmRenderPointMap].getBinaryDataInfo (&width, &height, 0, 0, 0, 0);
+            (*root_)[itmImages][itmRenderPointMap].getBinaryDataInfo (&width, &height, 0, &bpe, &isFlt, 0);
             (*root_)[itmImages][itmRenderPointMap].getBinaryData (pointMap, 0);
             (*root_)[itmImages][itmRenderPointMapTexture].getBinaryDataInfo (&width, &height, 0, 0, 0, 0);
             (*root_)[itmImages][itmRenderPointMapTexture].getBinaryData (rgbData, 0);
           }
           else
           {
-            camera_[itmImages][itmPointMap].getBinaryDataInfo (&width, &height, 0, 0, 0, 0);
+            camera_[itmImages][itmPointMap].getBinaryDataInfo (&width, &height, 0, &bpe, &isFlt, 0);
             camera_[itmImages][itmPointMap].getBinaryData (pointMap, 0);
           }
           // Copy point f and convert in meters
@@ -881,10 +892,18 @@ void pcl::EnsensoGrabber::processGrabbing ()
           cloud->width = width;
           cloud->height = height;
           cloud->is_dense = false;
-
+          //copy depth info to image
+          depthimage->header.stamp = getPCLStamp (timestamp);
+          depthimage->width = width;
+          depthimage->height = height;
+          depthimage->data.resize (width * height);
+          depthimage->encoding = "CV_8UC1";
+          int max = findMaxNoNaN (pointMap);
           // Copy data in point cloud (and convert milimeters in meters)
           for (size_t i = 0; i < pointMap.size (); i += 3)
           {
+            //set nans to 0 for depth image and fit to range 0-255
+            depthimage->data[i / 3] = std::isnan(pointMap[i+2]) ? 0 : (pointMap[i+2]/max)*255.0;
             cloud->points[i / 3].x = pointMap[i] / 1000.0;
             cloud->points[i / 3].y = pointMap[i + 1] / 1000.0;
             cloud->points[i / 3].z = pointMap[i + 2] / 1000.0;
@@ -901,7 +920,7 @@ void pcl::EnsensoGrabber::processGrabbing ()
         // Publish signals
         if (num_slots<sig_cb_ensenso_point_cloud_images> () > 0)
         {
-          point_cloud_images_signal_->operator () (cloud, rawimages, rectifiedimages);
+          point_cloud_images_signal_->operator () (cloud, rawimages, rectifiedimages, depthimage);
         }
         else if (num_slots<sig_cb_ensenso_point_cloud> () > 0)
         {
@@ -909,15 +928,15 @@ void pcl::EnsensoGrabber::processGrabbing ()
         }
         else if (num_slots<sig_cb_ensenso_images> () > 0)
         {
-          images_signal_->operator () (rawimages,rectifiedimages);
+          images_signal_->operator () (rawimages,rectifiedimages, depthimage);
         }
         else if (num_slots<sig_cb_ensenso_point_cloud_images_rgb> () > 0)
         {
-          point_cloud_images_signal_rgb_->operator () (cloud, rawimages, rectifiedimages, rgbimages);
+          point_cloud_images_signal_rgb_->operator () (cloud, rawimages, rectifiedimages, rgbimages, depthimage);
         }
         else if (num_slots<sig_cb_ensenso_images_rgb> () > 0)
         {
-          images_signal_rgb_->operator () (rawimages,rectifiedimages, rgbimages);
+          images_signal_rgb_->operator () (rawimages,rectifiedimages, rgbimages, depthimage);
         }
       }
       continue_grabbing = running_;
@@ -992,11 +1011,6 @@ bool pcl::EnsensoGrabber::setFindPattern (const bool enable)
   return (true);
 }
 
-bool pcl::EnsensoGrabber::setUseRGB (const bool enable)
-{
-  use_rgb_ = enable;
-  return (true);
-}
 
 bool pcl::EnsensoGrabber::setAutoBlackLevel (const bool enable) const
 {
@@ -1370,6 +1384,12 @@ if (!device_open_)
     ensensoExceptionHandling (ex, "setUseDisparityMapAreaOfInterest");
     return (false);
   }
+  return (true);
+}
+
+bool pcl::EnsensoGrabber::setUseRGB (const bool enable)
+{
+  use_rgb_ = enable;
   return (true);
 }
 
