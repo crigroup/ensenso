@@ -30,7 +30,7 @@ class PCL_EXPORTS EnsensoGrabber : public Grabber
 
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-    
+
     /** @cond */
     typedef boost::shared_ptr<EnsensoGrabber> Ptr;
     typedef boost::shared_ptr<const EnsensoGrabber> ConstPtr;
@@ -521,19 +521,19 @@ public:
 protected:
     /** @brief Grabber thread */
     boost::thread grabber_thread_;
-    
+
     /** @brief Boost point cloud signal */
     boost::signals2::signal<sig_cb_ensenso_point_cloud>* point_cloud_signal_;
-    
+
     /** @brief Boost images signal */
     boost::signals2::signal<sig_cb_ensenso_images>* images_signal_;
-    
+
     /** @brief Boost images + point cloud signal */
     boost::signals2::signal<sig_cb_ensenso_point_cloud_images>* point_cloud_images_signal_;
 
     /** @brief Boost images signal with RGB */
     boost::signals2::signal<sig_cb_ensenso_images_rgb>* images_signal_rgb_;
-    
+
     /** @brief Boost images + point cloud signal with RGB */
     boost::signals2::signal<sig_cb_ensenso_point_cloud_images_rgb>* point_cloud_images_signal_rgb_;
 
