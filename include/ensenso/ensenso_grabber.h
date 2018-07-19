@@ -20,13 +20,20 @@ namespace pcl
 struct PointXYZRGBA;
 template <typename T> class PointCloud;
 
+template <typename T>
+struct PCLGenImage : PCLImage
+{
+    std::vector<T> data;
+    typedef boost::shared_ptr< ::pcl::PCLGenImage<T> > Ptr;
+    typedef boost::shared_ptr< ::pcl::PCLGenImage<T>  const> ConstPtr;
+};
 /**
  * @brief Grabber for IDS-Imaging Ensenso's devices
  * @author Francisco Suarez-Ruiz
  */
 class PCL_EXPORTS EnsensoGrabber : public Grabber
 {
-    typedef std::pair<pcl::PCLImage, pcl::PCLImage> PairOfImages;
+    typedef std::pair<pcl::PCLGenImage<pcl::uint8_t>, pcl::PCLGenImage<pcl::uint8_t> > PairOfImages;
 
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
@@ -41,19 +48,19 @@ public:
 
     typedef void
     (sig_cb_ensenso_images)(const boost::shared_ptr<PairOfImages> &,const boost::shared_ptr<PairOfImages> &,
-                            const boost::shared_ptr<pcl::PCLImage> &);
+                            const boost::shared_ptr<pcl::PCLGenImage<float> > &);
 
     typedef void
     (sig_cb_ensenso_point_cloud_images)(const pcl::PointCloud<pcl::PointXYZRGBA>::Ptr &,
                                         const boost::shared_ptr<PairOfImages> &,const boost::shared_ptr<PairOfImages> &,
-                                        const boost::shared_ptr<pcl::PCLImage> &);
+                                        const boost::shared_ptr<pcl::PCLGenImage<float> > &);
     typedef void
     (sig_cb_ensenso_images_rgb)(const boost::shared_ptr<PairOfImages> &,const boost::shared_ptr<PairOfImages> &,
-                                const boost::shared_ptr<PairOfImages> &, const boost::shared_ptr<pcl::PCLImage> &);
+                                const boost::shared_ptr<PairOfImages> &, const boost::shared_ptr<pcl::PCLGenImage<float> > &);
     typedef void
     (sig_cb_ensenso_point_cloud_images_rgb)(const pcl::PointCloud<pcl::PointXYZRGBA>::Ptr &,
                                             const boost::shared_ptr<PairOfImages> &,const boost::shared_ptr<PairOfImages> &,
-                                            const boost::shared_ptr<PairOfImages> &, const boost::shared_ptr<pcl::PCLImage> &);
+                                            const boost::shared_ptr<PairOfImages> &, const boost::shared_ptr<pcl::PCLGenImage<float> > &);
     /** @endcond */
     
     /** @brief Constructor */

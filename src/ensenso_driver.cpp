@@ -29,7 +29,7 @@
 
 
 // Typedefs
-typedef std::pair<pcl::PCLImage, pcl::PCLImage> PairOfImages;
+typedef std::pair<pcl::PCLGenImage<pcl::uint8_t>, pcl::PCLGenImage<pcl::uint8_t> > PairOfImages;
 typedef pcl::PointXYZRGBA PointXYZRGBA;
 typedef pcl::PointCloud<PointXYZRGBA> PointCloudXYZRGBA;
 
@@ -47,10 +47,11 @@ class EnsensoDriver
     image_transport::CameraPublisher  rgb_raw_pub_;
     image_transport::CameraPublisher  l_raw_pub_;
     image_transport::CameraPublisher  r_raw_pub_;
+    image_transport::CameraPublisher  depth_pub_;
     image_transport::Publisher        rgb_rectified_pub_;
     image_transport::Publisher        l_rectified_pub_;
     image_transport::Publisher        r_rectified_pub_;
-    image_transport::Publisher        depth_pub_;
+
     // Publishers
     ros::Publisher                    cloud_pub_;
     ros::Publisher                    pattern_pose_pub_;
@@ -106,9 +107,9 @@ class EnsensoDriver
       }
       l_raw_pub_ = it.advertiseCamera("left/image_raw", 1);
       r_raw_pub_ = it.advertiseCamera("right/image_raw", 1);
+      depth_pub_ = it.advertiseCamera("depth/image_rect", 1);
       l_rectified_pub_ = it.advertise("left/image_rect", 1);
       r_rectified_pub_ = it.advertise("right/image_rect", 1);
-      depth_pub_ = it.advertise("depth/image_rect", 1);
       cloud_pub_ = nh_.advertise<sensor_msgs::PointCloud2 >("depth/points", 1, false);
 
       pattern_raw_pub_ = nh_.advertise<ensenso::RawStereoPattern> ("pattern/stereo", 1, false);
@@ -375,7 +376,7 @@ class EnsensoDriver
               const boost::shared_ptr<PairOfImages>&,
               const boost::shared_ptr<PairOfImages>&,
               const boost::shared_ptr<PairOfImages>&,
-              const boost::shared_ptr<pcl::PCLImage>&)> f = boost::bind (&EnsensoDriver::cloudImagesRGBCallback, this, _1, _2, _3, _4, _5);
+              const boost::shared_ptr<pcl::PCLGenImage<float> >&)> f = boost::bind (&EnsensoDriver::cloudImagesRGBCallback, this, _1, _2, _3, _4, _5);
             connection_ = ensenso_ptr_->registerCallback(f);
           }
           else
@@ -384,7 +385,7 @@ class EnsensoDriver
               const boost::shared_ptr<PointCloudXYZRGBA>&,
               const boost::shared_ptr<PairOfImages>&,
               const boost::shared_ptr<PairOfImages>&,
-              const boost::shared_ptr<pcl::PCLImage>&)> f = boost::bind (&EnsensoDriver::cloudImagesCallback, this, _1, _2, _3, _4);
+              const boost::shared_ptr<pcl::PCLGenImage<float> >&)> f = boost::bind (&EnsensoDriver::cloudImagesCallback, this, _1, _2, _3, _4);
             connection_ = ensenso_ptr_->registerCallback(f);
           }
         }
@@ -396,7 +397,7 @@ class EnsensoDriver
               const boost::shared_ptr<PairOfImages>&,
               const boost::shared_ptr<PairOfImages>&,
               const boost::shared_ptr<PairOfImages>&,
-              const boost::shared_ptr<pcl::PCLImage>&)> f = boost::bind (&EnsensoDriver::imagesRGBCallback, this, _1, _2, _3, _4);
+              const boost::shared_ptr<pcl::PCLGenImage<float> >&)> f = boost::bind (&EnsensoDriver::imagesRGBCallback, this, _1, _2, _3, _4);
             connection_ = ensenso_ptr_->registerCallback(f);
           }
           else
@@ -404,7 +405,7 @@ class EnsensoDriver
             boost::function<void(
               const boost::shared_ptr<PairOfImages>&,
               const boost::shared_ptr<PairOfImages>&,
-              const boost::shared_ptr<pcl::PCLImage>&)> f = boost::bind (&EnsensoDriver::imagesCallback, this, _1, _2, _3);
+              const boost::shared_ptr<pcl::PCLGenImage<float> >&)> f = boost::bind (&EnsensoDriver::imagesCallback, this, _1, _2, _3);
             connection_ = ensenso_ptr_->registerCallback(f);
           }
         }
@@ -468,97 +469,104 @@ class EnsensoDriver
       }
     }
 
-    void imagesCallback( const boost::shared_ptr<PairOfImages>& rawimages, const boost::shared_ptr<PairOfImages>& rectifiedimages, const boost::shared_ptr<pcl::PCLImage>& depthimage)
+    void imagesCallback( const boost::shared_ptr<PairOfImages>& rawimages, const boost::shared_ptr<PairOfImages>& rectifiedimages,
+                         const boost::shared_ptr<pcl::PCLGenImage<float> >& depthimage)
     {
       ros::Time now = ros::Time::now();
       // Get cameras info
-      sensor_msgs::CameraInfo linfo, rinfo;
+      sensor_msgs::CameraInfo linfo, rinfo, dinfo;
       ensenso_ptr_->getCameraInfo("Left", linfo);
       ensenso_ptr_->getCameraInfo("Right", rinfo);
+      ensenso_ptr_->getCameraInfo("Depth", dinfo);
       linfo.header.stamp = now;
       linfo.header.frame_id = camera_frame_id_;
       rinfo.header.stamp = now;
       rinfo.header.frame_id = camera_frame_id_;
-      depthimage->header.frame_id = camera_frame_id_;
+      dinfo.header.stamp = now;
+      dinfo.header.frame_id = camera_frame_id_;
       // Images
       if (l_raw_pub_.getNumSubscribers() > 0)
-        l_raw_pub_.publish(*toImageMsg(rawimages->first, now), linfo, now);
+        l_raw_pub_.publish(*toImageMsg(rawimages->first, now, camera_frame_id_), linfo, now);
       if (r_raw_pub_.getNumSubscribers() > 0)
-        r_raw_pub_.publish(*toImageMsg(rawimages->second, now), rinfo, now);
-      if (l_rectified_pub_.getNumSubscribers() > 0)
-        l_rectified_pub_.publish(toImageMsg(rectifiedimages->first, now));
-      if (r_rectified_pub_.getNumSubscribers() > 0)
-        r_rectified_pub_.publish(toImageMsg(rectifiedimages->second, now));
+        r_raw_pub_.publish(*toImageMsg(rawimages->second, now, camera_frame_id_), rinfo, now);
       if (depth_pub_.getNumSubscribers() > 0)
-        depth_pub_.publish(toImageMsg(*depthimage, now));
+        depth_pub_.publish(*toImageMsg(*depthimage, now,camera_frame_id_), dinfo, now);
+      if (l_rectified_pub_.getNumSubscribers() > 0)
+        l_rectified_pub_.publish(toImageMsg(rectifiedimages->first, now, camera_frame_id_));
+      if (r_rectified_pub_.getNumSubscribers() > 0)
+        r_rectified_pub_.publish(toImageMsg(rectifiedimages->second, now, camera_frame_id_));
       // Publish calibration pattern info (if any)
       publishCalibrationPattern(now);
     }
 
     void imagesRGBCallback( const boost::shared_ptr<PairOfImages>& rawimages, const boost::shared_ptr<PairOfImages>& rectifiedimages,
-                          const boost::shared_ptr<PairOfImages>& rgbimages, const boost::shared_ptr<pcl::PCLImage>& depthimage)
+                            const boost::shared_ptr<PairOfImages>& rgbimages, const boost::shared_ptr<pcl::PCLGenImage<float> >& depthimage)
     {
       ros::Time now = ros::Time::now();
       // Get cameras info
-      sensor_msgs::CameraInfo linfo, rinfo, rgbinfo;
+      sensor_msgs::CameraInfo linfo, rinfo, rgbinfo, dinfo;
       ensenso_ptr_->getCameraInfo("Left", linfo);
       ensenso_ptr_->getCameraInfo("Right", rinfo);
       ensenso_ptr_->getCameraInfo("RGB", rinfo);
+      ensenso_ptr_->getCameraInfo("Depth", dinfo);
       linfo.header.stamp = now;
       linfo.header.frame_id = camera_frame_id_;
       rinfo.header.stamp = now;
       rinfo.header.frame_id = camera_frame_id_;
       rgbinfo.header.stamp = now;
       rgbinfo.header.frame_id = rgb_camera_frame_id_;
+      dinfo.header.stamp = now;
+      dinfo.header.frame_id = rgb_camera_frame_id_;
 
       depthimage->header.frame_id = rgb_camera_frame_id_;
       //TF
       publishTF(now);
       // Images
       if (l_raw_pub_.getNumSubscribers() > 0)
-        l_raw_pub_.publish(*toImageMsg(rawimages->first, now), linfo, now);
+        l_raw_pub_.publish(*toImageMsg(rawimages->first, now, camera_frame_id_), linfo, now);
       if (r_raw_pub_.getNumSubscribers() > 0)
-        r_raw_pub_.publish(*toImageMsg(rawimages->second, now), rinfo, now);
+        r_raw_pub_.publish(*toImageMsg(rawimages->second, now, camera_frame_id_), rinfo, now);
       if (l_rectified_pub_.getNumSubscribers() > 0)
-        l_rectified_pub_.publish(toImageMsg(rectifiedimages->first, now));
+        l_rectified_pub_.publish(toImageMsg(rectifiedimages->first, now, camera_frame_id_));
       if (r_rectified_pub_.getNumSubscribers() > 0)
-        r_rectified_pub_.publish(toImageMsg(rectifiedimages->second, now));
+        r_rectified_pub_.publish(toImageMsg(rectifiedimages->second, now, camera_frame_id_));
       if (rgb_raw_pub_.getNumSubscribers() > 0)
-        rgb_raw_pub_.publish(*toImageMsg(rgbimages->first, now), rgbinfo, now);
+        rgb_raw_pub_.publish(*toImageMsg(rgbimages->first, now, rgb_camera_frame_id_), rgbinfo, now);
       if (rgb_rectified_pub_.getNumSubscribers() > 0)
-        rgb_rectified_pub_.publish(toImageMsg(rgbimages->second, now));
+        rgb_rectified_pub_.publish(toImageMsg(rgbimages->second, now, rgb_camera_frame_id_));
       if (depth_pub_.getNumSubscribers() > 0)
-        depth_pub_.publish(toImageMsg(*depthimage, now));
+        depth_pub_.publish(*toImageMsg(*depthimage, now, rgb_camera_frame_id_), dinfo, now);
       // Publish calibration pattern info (if any)
       publishCalibrationPattern(now);
     }
 
     void cloudImagesCallback( const boost::shared_ptr<PointCloudXYZRGBA>& cloud,
-                          const boost::shared_ptr<PairOfImages>& rawimages, const boost::shared_ptr<PairOfImages>& rectifiedimages,
-                          const boost::shared_ptr<pcl::PCLImage>& depthimage)
+                              const boost::shared_ptr<PairOfImages>& rawimages, const boost::shared_ptr<PairOfImages>& rectifiedimages,
+                              const boost::shared_ptr<pcl::PCLGenImage<float> >& depthimage)
     {
       ros::Time now = ros::Time::now();
       // Get cameras info
-      sensor_msgs::CameraInfo linfo, rinfo;
+      sensor_msgs::CameraInfo linfo, rinfo, dinfo;
       ensenso_ptr_->getCameraInfo("Left", linfo);
       ensenso_ptr_->getCameraInfo("Right", rinfo);
+      ensenso_ptr_->getCameraInfo("Depth", dinfo);
       linfo.header.stamp = now;
       linfo.header.frame_id = camera_frame_id_;
       rinfo.header.stamp = now;
       rinfo.header.frame_id = camera_frame_id_;
-
-      depthimage->header.frame_id = camera_frame_id_;
+      dinfo.header.stamp = now;
+      dinfo.header.frame_id = camera_frame_id_;
       // Images
       if (l_raw_pub_.getNumSubscribers() > 0)
-        l_raw_pub_.publish(*toImageMsg(rawimages->first, now), linfo, now);
+        l_raw_pub_.publish(*toImageMsg(rawimages->first, now, camera_frame_id_), linfo, now);
       if (r_raw_pub_.getNumSubscribers() > 0)
-        r_raw_pub_.publish(*toImageMsg(rawimages->second, now), rinfo, now);
+        r_raw_pub_.publish(*toImageMsg(rawimages->second, now, camera_frame_id_), rinfo, now);
       if (l_rectified_pub_.getNumSubscribers() > 0)
-        l_rectified_pub_.publish(toImageMsg(rectifiedimages->first, now));
+        l_rectified_pub_.publish(toImageMsg(rectifiedimages->first, now, camera_frame_id_));
       if (r_rectified_pub_.getNumSubscribers() > 0)
-        r_rectified_pub_.publish(toImageMsg(rectifiedimages->second, now));
+        r_rectified_pub_.publish(toImageMsg(rectifiedimages->second, now, camera_frame_id_));
       if (depth_pub_.getNumSubscribers() > 0)
-        depth_pub_.publish(toImageMsg(*depthimage, now));
+        depth_pub_.publish(*toImageMsg(*depthimage, now, camera_frame_id_), dinfo, now);
       // Publish calibration pattern info (if any)
       publishCalibrationPattern(now);
       // Point cloud
@@ -573,40 +581,41 @@ class EnsensoDriver
     }
 
     void cloudImagesRGBCallback( const boost::shared_ptr<PointCloudXYZRGBA>& cloud,
-                          const boost::shared_ptr<PairOfImages>& rawimages, const boost::shared_ptr<PairOfImages>& rectifiedimages,
-                          const boost::shared_ptr<PairOfImages>& rgbimages, const boost::shared_ptr<pcl::PCLImage>& depthimage)
+                                 const boost::shared_ptr<PairOfImages>& rawimages, const boost::shared_ptr<PairOfImages>& rectifiedimages,
+                                 const boost::shared_ptr<PairOfImages>& rgbimages, const boost::shared_ptr<pcl::PCLGenImage<float> >& depthimage)
     {
       ros::Time now = ros::Time::now();
       // Get cameras info
-      sensor_msgs::CameraInfo linfo, rinfo, rgbinfo;
+      sensor_msgs::CameraInfo linfo, rinfo, rgbinfo, dinfo;
       ensenso_ptr_->getCameraInfo("Left", linfo);
       ensenso_ptr_->getCameraInfo("Right", rinfo);
       ensenso_ptr_->getCameraInfo("RGB", rgbinfo);
+      ensenso_ptr_->getCameraInfo("Depth", dinfo);
       linfo.header.stamp = now;
       linfo.header.frame_id = camera_frame_id_;
       rinfo.header.stamp = now;
       rinfo.header.frame_id = camera_frame_id_;
       rgbinfo.header.stamp = now;
       rgbinfo.header.frame_id = rgb_camera_frame_id_;
-
-      depthimage->header.frame_id = rgb_camera_frame_id_;
+      dinfo.header.stamp = now;
+      dinfo.header.frame_id = rgb_camera_frame_id_;
       //TF
       publishTF(now);
       // Images
       if (l_raw_pub_.getNumSubscribers() > 0)
-        l_raw_pub_.publish(*toImageMsg(rawimages->first, now), linfo, now);
+        l_raw_pub_.publish(*toImageMsg(rawimages->first, now, camera_frame_id_), linfo, now);
       if (r_raw_pub_.getNumSubscribers() > 0)
-        r_raw_pub_.publish(*toImageMsg(rawimages->second, now), rinfo, now);
+        r_raw_pub_.publish(*toImageMsg(rawimages->second, now, camera_frame_id_), rinfo, now);
       if (l_rectified_pub_.getNumSubscribers() > 0)
-        l_rectified_pub_.publish(toImageMsg(rectifiedimages->first, now));
+        l_rectified_pub_.publish(toImageMsg(rectifiedimages->first, now, camera_frame_id_));
       if (r_rectified_pub_.getNumSubscribers() > 0)
-        r_rectified_pub_.publish(toImageMsg(rectifiedimages->second, now));
+        r_rectified_pub_.publish(toImageMsg(rectifiedimages->second, now, camera_frame_id_));
       if (rgb_raw_pub_.getNumSubscribers() > 0)
-        rgb_raw_pub_.publish(*toImageMsg(rgbimages->first, now), rgbinfo, now);
+        rgb_raw_pub_.publish(*toImageMsg(rgbimages->first, now, rgb_camera_frame_id_), rgbinfo, now);
       if (rgb_rectified_pub_.getNumSubscribers() > 0)
-        rgb_rectified_pub_.publish(toImageMsg(rgbimages->second, now));
+        rgb_rectified_pub_.publish(toImageMsg(rgbimages->second, now, rgb_camera_frame_id_));
       if (depth_pub_.getNumSubscribers() > 0)
-        depth_pub_.publish(toImageMsg(*depthimage, now));
+        depth_pub_.publish(*toImageMsg(*depthimage, now, rgb_camera_frame_id_), dinfo, now);
       // Publish calibration pattern info (if any)
       publishCalibrationPattern(now);
       // Point cloud
@@ -677,26 +686,28 @@ class EnsensoDriver
         }
       }
     }
-
-    sensor_msgs::ImagePtr toImageMsg(pcl::PCLImage pcl_image, const ros::Time &now)
+    template <typename T>
+    sensor_msgs::ImagePtr toImageMsg(pcl::PCLGenImage<T>& pcl_image, ros::Time now, std::string frame_id)
     {
       unsigned char *image_array = reinterpret_cast<unsigned char *>(&pcl_image.data[0]);
       int type(CV_8UC1);
       std::string encoding("mono8");
       std_msgs::Header header;
+      header.stamp = now;
+      header.frame_id = frame_id;
+      //depth image
+      if (pcl_image.encoding == "CV_32FC1")
+      {
+        type = CV_32FC1;
+        encoding = "32FC1";
+      }
       //rgb images
       if (pcl_image.encoding == "CV_8UC3")
       {
         type = CV_8UC3;
         encoding = "rgb8";
-        header.frame_id = rgb_camera_frame_id_;
-      }
-      else
-      {
-        header.frame_id = camera_frame_id_;
       }
       cv::Mat image_mat(pcl_image.height, pcl_image.width, type, image_array);
-      header.stamp = now;
       return cv_bridge::CvImage(header, encoding, image_mat).toImageMsg();
     }
 };

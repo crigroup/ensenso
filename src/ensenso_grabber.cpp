@@ -329,7 +329,11 @@ bool pcl::EnsensoGrabber::getCameraInfo(std::string cam, sensor_msgs::CameraInfo
 {
   try
   {
-    NxLibItem camera = (cam == "RGB") ? monocam_ : camera_;
+    if (cam == "Depth")
+    {
+      cam  = use_rgb_ ? "RGB" : "Left";
+    }
+    NxLibItem camera = (cam == "RGB" ) ? monocam_ : camera_;
     NxLibItem cameraMat = (cam == "RGB") ? monocam_[itmCalibration][itmCamera] : camera_[itmCalibration][itmDynamic][itmStereo][cam][itmCamera];
     NxLibItem cameraDist = (cam == "RGB") ? monocam_[itmCalibration][itmDistortion] : camera_[itmCalibration][itmMonocular][cam][itmDistortion];
 
@@ -693,7 +697,7 @@ void pcl::EnsensoGrabber::processGrabbing ()
         boost::shared_ptr<PairOfImages> rawimages (new PairOfImages);
         boost::shared_ptr<PairOfImages> rectifiedimages (new PairOfImages);
         boost::shared_ptr<PairOfImages> rgbimages (new PairOfImages);
-        boost::shared_ptr<pcl::PCLImage> depthimage (new pcl::PCLImage);
+        boost::shared_ptr<pcl::PCLGenImage<float> > depthimage (new pcl::PCLGenImage<float>);
         // Update FPS
         static double last = pcl::getTime ();
         double now = pcl::getTime ();
@@ -897,13 +901,11 @@ void pcl::EnsensoGrabber::processGrabbing ()
           depthimage->width = width;
           depthimage->height = height;
           depthimage->data.resize (width * height);
-          depthimage->encoding = "CV_8UC1";
-          int max = findMaxNoNaN (pointMap);
+          depthimage->encoding = "CV_32FC1";
           // Copy data in point cloud (and convert milimeters in meters)
           for (size_t i = 0; i < pointMap.size (); i += 3)
           {
-            //set nans to 0 for depth image and fit to range 0-255
-            depthimage->data[i / 3] = std::isnan(pointMap[i+2]) ? 0 : (pointMap[i+2]/max)*255.0;
+            depthimage->data[i / 3] = pointMap[i+2] / 1000.0;
             cloud->points[i / 3].x = pointMap[i] / 1000.0;
             cloud->points[i / 3].y = pointMap[i + 1] / 1000.0;
             cloud->points[i / 3].z = pointMap[i + 2] / 1000.0;
