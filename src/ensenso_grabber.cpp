@@ -315,16 +315,6 @@ int pcl::EnsensoGrabber::enumDevices () const
   return (camera_count);
 }
 
-bool compareNoNaN (float x, float y)
-{
-  return x < y ? true : std::isnan(x);
-}
-
-float pcl::EnsensoGrabber::findMaxNoNaN (std::vector<float> vec) const
-{
-  return *std::max_element(vec.begin(), vec.end(), compareNoNaN);
-}
-
 bool pcl::EnsensoGrabber::getCameraInfo(std::string cam, sensor_msgs::CameraInfo &cam_info) const
 {
   try
@@ -355,6 +345,12 @@ bool pcl::EnsensoGrabber::getCameraInfo(std::string cam, sensor_msgs::CameraInfo
           cam_info.R[3*i+j] = camera[itmCalibration][itmDynamic][itmStereo][cam][itmRotation][j][i].asDouble();
         }
       }
+    }
+    if (cam == "RGB")
+    {
+      cam_info.R[0] = 1.0;
+      cam_info.R[4] = 1.0;
+      cam_info.R[8] = 1.0;
     }
     //first row
     cam_info.P[0] = cameraMat[0][0].asDouble();
@@ -684,6 +680,17 @@ bool pcl::EnsensoGrabber::openTcpPort (const int port)
 
 void pcl::EnsensoGrabber::processGrabbing ()
 {
+  //get Translation between left camera and RGB frame
+  double rgb_trans_x, rgb_trans_y;
+  rgb_trans_x = rgb_trans_y = 0.0;
+  if (use_rgb_)
+  {
+    NxLibCommand convert(cmdConvertTransformation);
+    convert.parameters()[itmTransformation].setJson(monocam_[itmLink].asJson());
+    convert.execute();
+    rgb_trans_x = convert.result()[itmTransformation][3][0].asDouble();
+    rgb_trans_y = convert.result()[itmTransformation][3][1].asDouble();
+  }
   bool continue_grabbing = running_;
   while (continue_grabbing)
   {
@@ -727,18 +734,97 @@ void pcl::EnsensoGrabber::processGrabbing ()
         if (!running_) {
             return;
         }
-
+        //get timestamp of aquired image
         double timestamp;
         camera_[itmImages][itmRaw][itmLeft].getBinaryDataInfo (0, 0, 0, 0, 0, &timestamp);
-
+        bool rectified = false;
+        // Gather point cloud
+        if (num_slots<sig_cb_ensenso_point_cloud> () > 0 || num_slots<sig_cb_ensenso_point_cloud_images> () > 0 || num_slots<sig_cb_ensenso_point_cloud_images_rgb> () > 0)
+        {
+          // Stereo matching task
+          NxLibCommand (cmdComputeDisparityMap).execute ();
+          rectified = true;
+          // Convert disparity map into XYZ data for each pixel
+          if (use_rgb_ && mono_device_open_)
+          {
+            NxLibCommand renderPM (cmdRenderPointMap);
+            renderPM.parameters()[itmCamera].set(monocam_[itmSerialNumber].asString());
+            renderPM.parameters()[itmNear].set(near_plane_);
+            renderPM.parameters()[itmFar].set(far_plane_);
+            renderPM.execute ();
+          }
+          else
+          {
+            NxLibCommand (cmdComputePointMap).execute ();
+          }
+          // Get info about the computed point map and copy it into a std::vector
+          std::vector<float> pointMap;
+          std::vector<char> rgbData;
+          int width, height;
+          if (use_rgb_ && mono_device_open_)
+          {
+            (*root_)[itmImages][itmRenderPointMap].getBinaryDataInfo (&width, &height, 0, 0, 0, 0);
+            (*root_)[itmImages][itmRenderPointMap].getBinaryData (pointMap, 0);
+            (*root_)[itmImages][itmRenderPointMapTexture].getBinaryDataInfo (&width, &height, 0, 0, 0, 0);
+            (*root_)[itmImages][itmRenderPointMapTexture].getBinaryData (rgbData, 0);
+          }
+          else
+          {
+            camera_[itmImages][itmPointMap].getBinaryDataInfo (&width, &height, 0, 0, 0, 0);
+            camera_[itmImages][itmPointMap].getBinaryData (pointMap, 0);
+          }
+          // Copy point f and convert in meters
+          cloud->header.stamp = getPCLStamp (timestamp);
+          cloud->points.resize (height * width);
+          cloud->width = width;
+          cloud->height = height;
+          cloud->is_dense = false;
+          //copy depth info to image
+          depthimage->header.stamp = getPCLStamp (timestamp);
+          depthimage->width = width;
+          depthimage->height = height;
+          depthimage->data.resize (width * height);
+          depthimage->encoding = "CV_32FC1";
+          // Copy data in point cloud (and convert milimeters in meters)
+          if (use_rgb_ && mono_device_open_)
+          {
+            for (size_t i = 0; i < pointMap.size (); i += 3)
+            {
+              depthimage->data[i / 3] = pointMap[i + 2] / 1000.0;
+              cloud->points[i / 3].x = (pointMap[i] + rgb_trans_x) / 1000.0;
+              cloud->points[i / 3].y = (pointMap[i + 1] + rgb_trans_y) / 1000.0;
+              cloud->points[i / 3].z = pointMap[i + 2] / 1000.0;
+            }
+            for (size_t i = 0; i < rgbData.size (); i += 4)
+            {
+              cloud->points[i / 4].r = rgbData[i];
+              cloud->points[i / 4].g = rgbData[i + 1];
+              cloud->points[i / 4].b = rgbData[i + 2];
+              cloud->points[i / 4].a = rgbData[i + 3];
+            }
+          }
+          else
+          {
+            for (size_t i = 0; i < pointMap.size (); i += 3)
+            {
+              depthimage->data[i / 3] = pointMap[i + 2] / 1000.0;
+              cloud->points[i / 3].x = pointMap[i] / 1000.0;
+              cloud->points[i / 3].y = pointMap[i + 1] / 1000.0;
+              cloud->points[i / 3].z = pointMap[i + 2] / 1000.0;
+            }
+          }
+        }
         // Gather images
         pattern_mutex_.lock ();
         last_stereo_pattern_ = std::string("");
         pattern_mutex_.unlock ();
         if (num_slots<sig_cb_ensenso_images> () > 0 || num_slots<sig_cb_ensenso_point_cloud_images> () > 0 || num_slots<sig_cb_ensenso_images_rgb> () > 0 || num_slots<sig_cb_ensenso_point_cloud_images_rgb> () > 0 )
         {
-          // Rectify images
-          NxLibCommand (cmdRectifyImages).execute ();
+          if (!rectified)
+          {
+            NxLibCommand rectify_images (cmdRectifyImages);
+            rectify_images.execute ();
+          }
           int width, height, channels, bpe;
           bool isFlt, collected_pattern = false;
           // Try to collect calibration pattern and overlay it to the raw image
@@ -854,71 +940,6 @@ void pcl::EnsensoGrabber::processGrabbing ()
           }
         }
 
-        // Gather point cloud
-        if (num_slots<sig_cb_ensenso_point_cloud> () > 0 || num_slots<sig_cb_ensenso_point_cloud_images> () > 0 || num_slots<sig_cb_ensenso_point_cloud_images_rgb> () > 0)
-        {
-          // Stereo matching task
-          NxLibCommand (cmdComputeDisparityMap).execute ();
-          // Convert disparity map into XYZ data for each pixel
-          if (use_rgb_ && mono_device_open_)
-          {
-
-            NxLibCommand renderPM (cmdRenderPointMap);
-            renderPM.parameters()[itmCamera].set(monocam_[itmSerialNumber].asString());
-            renderPM.parameters()[itmNear].set(near_plane_);
-            renderPM.parameters()[itmFar].set(far_plane_);
-            renderPM.execute ();
-          }
-          else
-          {
-            NxLibCommand (cmdComputePointMap).execute ();
-          }
-          // Get info about the computed point map and copy it into a std::vector
-          std::vector<float> pointMap;
-          std::vector<char> rgbData;
-          int width, height, bpe;
-          bool isFlt;
-          if (use_rgb_ && mono_device_open_)
-          {
-            (*root_)[itmImages][itmRenderPointMap].getBinaryDataInfo (&width, &height, 0, &bpe, &isFlt, 0);
-            (*root_)[itmImages][itmRenderPointMap].getBinaryData (pointMap, 0);
-            (*root_)[itmImages][itmRenderPointMapTexture].getBinaryDataInfo (&width, &height, 0, 0, 0, 0);
-            (*root_)[itmImages][itmRenderPointMapTexture].getBinaryData (rgbData, 0);
-          }
-          else
-          {
-            camera_[itmImages][itmPointMap].getBinaryDataInfo (&width, &height, 0, &bpe, &isFlt, 0);
-            camera_[itmImages][itmPointMap].getBinaryData (pointMap, 0);
-          }
-          // Copy point f and convert in meters
-          cloud->header.stamp = getPCLStamp (timestamp);
-          cloud->points.resize (height * width);
-          cloud->width = width;
-          cloud->height = height;
-          cloud->is_dense = false;
-          //copy depth info to image
-          depthimage->header.stamp = getPCLStamp (timestamp);
-          depthimage->width = width;
-          depthimage->height = height;
-          depthimage->data.resize (width * height);
-          depthimage->encoding = "CV_32FC1";
-          // Copy data in point cloud (and convert milimeters in meters)
-          for (size_t i = 0; i < pointMap.size (); i += 3)
-          {
-            depthimage->data[i / 3] = pointMap[i+2] / 1000.0;
-            cloud->points[i / 3].x = pointMap[i] / 1000.0;
-            cloud->points[i / 3].y = pointMap[i + 1] / 1000.0;
-            cloud->points[i / 3].z = pointMap[i + 2] / 1000.0;
-          }
-          if (use_rgb_ && mono_device_open_)
-            for (size_t i = 0; i < rgbData.size (); i += 4)
-            {
-              cloud->points[i / 4].r = rgbData[i];
-              cloud->points[i / 4].g = rgbData[i+1];
-              cloud->points[i / 4].b = rgbData[i+2];
-              cloud->points[i / 4].a = rgbData[i+3];
-            }
-          }
         // Publish signals
         if (num_slots<sig_cb_ensenso_point_cloud_images> () > 0)
         {
@@ -990,7 +1011,7 @@ bool pcl::EnsensoGrabber::setEnableCUDA (const bool enable) const
 {
   try
   {
-    if ((*root_)[itmParameters][itmCUDA].exists())
+    if ((*root_)[itmParameters][itmCUDA].exists() && (*root_)[itmParameters][itmCUDA][itmAvailable].asBool())
     {
       (*root_)[itmParameters][itmCUDA][itmEnabled].set (enable);
     }

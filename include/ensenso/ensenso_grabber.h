@@ -141,7 +141,6 @@ public:
      * @note At least one calibration pattern must have been collected before, use collectPattern() before */
     bool estimatePatternPose (Eigen::Affine3d &pose, const bool average=false) const;
     
-    float findMaxNoNaN (std::vector<float> vec) const;
     /** @brief Get class name
      * @returns A string containing the class name */
     std::string getName () const;

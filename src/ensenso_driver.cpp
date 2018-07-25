@@ -584,6 +584,7 @@ class EnsensoDriver
                                  const boost::shared_ptr<PairOfImages>& rawimages, const boost::shared_ptr<PairOfImages>& rectifiedimages,
                                  const boost::shared_ptr<PairOfImages>& rgbimages, const boost::shared_ptr<pcl::PCLGenImage<float> >& depthimage)
     {
+
       ros::Time now = ros::Time::now();
       // Get cameras info
       sensor_msgs::CameraInfo linfo, rinfo, rgbinfo, dinfo;
@@ -602,6 +603,7 @@ class EnsensoDriver
       //TF
       publishTF(now);
       // Images
+
       if (l_raw_pub_.getNumSubscribers() > 0)
         l_raw_pub_.publish(*toImageMsg(rawimages->first, now, camera_frame_id_), linfo, now);
       if (r_raw_pub_.getNumSubscribers() > 0)
