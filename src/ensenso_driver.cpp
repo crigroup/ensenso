@@ -262,7 +262,11 @@ class EnsensoDriver
       ROS_DEBUG_STREAM("Images: "   << std::boolalpha << config.Images);
       ROS_DEBUG_STREAM("Use RGB: "   << std::boolalpha << config.RGB);
       ROS_DEBUG("CUDA Parameters");
-      ROS_DEBUG_STREAM("Use CUDA: "   << std::boolalpha << config.EnableCUDA);
+      #ifdef CUDA_IMPLEMENTED
+        ROS_DEBUG_STREAM("Use CUDA: "   << std::boolalpha << config.EnableCUDA);
+      #else
+        ROS_DEBUG_STREAM("CUDA is not supported. Upgrade EnsensoSDK to Version >= 2.1.7 in order to use CUDA.");
+      #endif
       ROS_DEBUG("---");
       ensenso_ptr_->setUseRGB(config.RGB);
       // Capture parameters
@@ -309,7 +313,9 @@ class EnsensoDriver
       ensenso_ptr_->setNearPlane(config.NearPlane);
       ensenso_ptr_->setFarPlane(config.FarPlane);
       //CUDA parameter
-      ensenso_ptr_->setEnableCUDA(config.EnableCUDA);
+      #ifdef CUDA_IMPLEMENTED
+        ensenso_ptr_->setEnableCUDA(config.EnableCUDA);
+      #endif
       // Streaming parameters
       configureStreaming(config.Cloud, config.Images, config.TriggerMode);
     }

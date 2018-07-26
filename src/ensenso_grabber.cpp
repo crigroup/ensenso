@@ -1009,22 +1009,26 @@ bool pcl::EnsensoGrabber::restoreDefaultConfiguration () const
 
 bool pcl::EnsensoGrabber::setEnableCUDA (const bool enable) const
 {
-  try
-  {
-    if ((*root_)[itmParameters][itmCUDA].exists() && (*root_)[itmParameters][itmCUDA][itmAvailable].asBool())
+  #ifdef CUDA_IMPLEMENTED
+    try
     {
-      (*root_)[itmParameters][itmCUDA][itmEnabled].set (enable);
+      if ((*root_)[itmParameters][itmCUDA][itmAvailable].asBool())
+      {
+        (*root_)[itmParameters][itmCUDA][itmEnabled].set (enable);
+      }
+      else
+      {
+        PCL_WARN("CUDA is not supported on this machine.");
+      }
     }
-    else
+    catch (NxLibException &ex)
     {
-      PCL_WARN("CUDA support requires Ensenso SDK version >=2.1.7.");
+      ensensoExceptionHandling (ex, "setEnableCUDA");
+      return (false);
     }
-  }
-  catch (NxLibException &ex)
-  {
-    ensensoExceptionHandling (ex, "setEnableCUDA");
-    return (false);
-  }
+  #else
+    PCL_WARN("CUDA is not supported. Upgrade EnsensoSDK to Version >= 2.1.7 in order to use CUDA.");
+  #endif
   return (true);
 }
 
