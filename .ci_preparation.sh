@@ -21,9 +21,10 @@ export RUNLEVEL=3
 echo "This is only required for the docker container"
 echo "Update content of policy-rc.d so that codemeter can be started"
 printf "#!/bin/sh\nexit 0" > /usr/sbin/policy-rc.d
+#Install required packages
+apt-get install pkg-config -y
 # Install optional packages to avoid warnings during compilation
 apt-get install libopenni2-dev libpcap-dev libpng12-dev -y
-
 # Run installation of ensenso proprietary DEBs
 ./scripts/install_driver.sh
 
