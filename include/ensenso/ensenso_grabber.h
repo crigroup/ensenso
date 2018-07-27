@@ -17,9 +17,6 @@
 #include <nxLib.h>
 namespace pcl
 {
-struct PointXYZRGBA;
-template <typename T> class PointCloud;
-
 template <typename T>
 struct PCLGenImage : PCLImage
 {
@@ -44,14 +41,17 @@ public:
 
     // Define callback signature typedefs
     typedef void
-    (sig_cb_ensenso_point_cloud)(const pcl::PointCloud<pcl::PointXYZRGBA>::Ptr &);
+    (sig_cb_ensenso_point_cloud)(const pcl::PointCloud<pcl::PointXYZ>::Ptr &);
+
+    typedef void
+    (sig_cb_ensenso_point_cloud_rgb)(const pcl::PointCloud<pcl::PointXYZRGBA>::Ptr &);
 
     typedef void
     (sig_cb_ensenso_images)(const boost::shared_ptr<PairOfImages> &,const boost::shared_ptr<PairOfImages> &,
                             const boost::shared_ptr<pcl::PCLGenImage<float> > &);
 
     typedef void
-    (sig_cb_ensenso_point_cloud_images)(const pcl::PointCloud<pcl::PointXYZRGBA>::Ptr &,
+    (sig_cb_ensenso_point_cloud_images)(const pcl::PointCloud<pcl::PointXYZ>::Ptr &,
                                         const boost::shared_ptr<PairOfImages> &,const boost::shared_ptr<PairOfImages> &,
                                         const boost::shared_ptr<pcl::PCLGenImage<float> > &);
     typedef void
@@ -115,7 +115,7 @@ public:
      * @param[in] buffer Specifies whether the pattern should be added to the pattern buffer.
      * @return the number of calibration patterns stored in the @code nxTree @endcode , -1 on error
      * @warning A device must be opened and must not be running.*/
-    int collectPattern (const bool buffer=true) const;
+    int collectPattern (const bool buffer = true, const bool decode_data = false) const;
     
     /** @brief Decodes the pattern grid size and thickness
      * @return the grid size in mm*/
@@ -140,7 +140,7 @@ public:
      * @warning A device must be opened and must not be running.
      * @note At least one calibration pattern must have been collected before, use collectPattern() before */
     bool estimatePatternPose (Eigen::Affine3d &pose, const bool average=false) const;
-    
+
     /** @brief Get class name
      * @returns A string containing the class name */
     std::string getName () const;
@@ -531,6 +531,9 @@ protected:
     /** @brief Boost point cloud signal */
     boost::signals2::signal<sig_cb_ensenso_point_cloud>* point_cloud_signal_;
 
+    /** @brief Boost point cloud signal with RGB */
+    boost::signals2::signal<sig_cb_ensenso_point_cloud_rgb>* point_cloud_rgb_signal_;
+
     /** @brief Boost images signal */
     boost::signals2::signal<sig_cb_ensenso_images>* images_signal_;
 
@@ -591,6 +594,12 @@ protected:
     /** @brief Camera frames per second (FPS) */
     float fps_;
 
+    /** @brief timestamp of the current frame */
+    double timestamp_;
+
+    /** @brief translation from left camera to RGB frame */
+    pcl::PointXYZ translation_to_rgb_;
+
     /** @brief Mutual exclusion for FPS computation */
     mutable boost::mutex fps_mutex_;
     
@@ -629,6 +638,27 @@ protected:
      * PCL time stamps are filled for both the images and clouds grabbed (see @ref getPCLStamp)
      * @note The cloud time stamp is the RAW image time stamp */
     void processGrabbing ();
+
+    /**
+    *   @brief triggers all available cameras
+    */
+    void triggerCameras();
+
+    /** @brief Retrieve Image from NxLib
+    * @param[out] acquired image
+    * @param[in] NxLib Node from which image should be acquired
+    */
+    void getImage(const NxLibItem& image_node, pcl::PCLGenImage<pcl::uint8_t>& image_out);
+
+    /** @brief Retrieve RGB depth data from NxLib
+    * @param[out] acquired point cloud and depth image
+    */
+    void getDepthDataRGB(const pcl::PointCloud<pcl::PointXYZRGBA>::Ptr& cloud, const pcl::PCLGenImage<float>::Ptr& depthimage);
+
+    /** @brief Retrieve depth data from NxLib
+    * @param[out] acquired point cloud and depth image
+    */
+    void getDepthData(const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud, const pcl::PCLGenImage<float>::Ptr& depthimage);
 
 };
 }  // namespace pcl

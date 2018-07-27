@@ -213,7 +213,7 @@ bool pcl::EnsensoGrabber::closeTcpPort ()
   return (true);
 }
 
-int pcl::EnsensoGrabber::collectPattern (const bool buffer) const
+int pcl::EnsensoGrabber::collectPattern (const bool buffer, const bool decode_data) const
 {
   if (!device_open_ || running_)
     return (-1);
@@ -222,7 +222,7 @@ int pcl::EnsensoGrabber::collectPattern (const bool buffer) const
     NxLibCommand (cmdCapture).execute ();
     NxLibCommand collect_pattern (cmdCollectPattern);
     collect_pattern.parameters ()[itmBuffer].set (buffer);
-    collect_pattern.parameters ()[itmDecodeData].set (false);
+    collect_pattern.parameters ()[itmDecodeData].set (decode_data);
     collect_pattern.execute ();
   }
   catch (NxLibException &ex)
@@ -685,15 +685,13 @@ bool pcl::EnsensoGrabber::openTcpPort (const int port)
 void pcl::EnsensoGrabber::processGrabbing ()
 {
   //get Translation between left camera and RGB frame
-  double rgb_trans_x, rgb_trans_y;
-  rgb_trans_x = rgb_trans_y = 0.0;
   if (use_rgb_)
   {
     NxLibCommand convert(cmdConvertTransformation);
     convert.parameters()[itmTransformation].setJson(monocam_[itmLink].asJson());
     convert.execute();
-    rgb_trans_x = convert.result()[itmTransformation][3][0].asDouble();
-    rgb_trans_y = convert.result()[itmTransformation][3][1].asDouble();
+    translation_to_rgb_.x = convert.result()[itmTransformation][3][0].asDouble();
+    translation_to_rgb_.y = convert.result()[itmTransformation][3][1].asDouble();
   }
   bool continue_grabbing = running_;
   while (continue_grabbing)
@@ -703,7 +701,8 @@ void pcl::EnsensoGrabber::processGrabbing ()
       // Publish cloud / images
       if (num_slots<sig_cb_ensenso_point_cloud> () > 0 || num_slots<sig_cb_ensenso_images> () > 0 || num_slots<sig_cb_ensenso_point_cloud_images> () > 0 || num_slots<sig_cb_ensenso_point_cloud_images_rgb> () > 0 || num_slots<sig_cb_ensenso_images_rgb> () > 0)
       {
-        pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud (new pcl::PointCloud<pcl::PointXYZRGBA>);
+        pcl::PointCloud<pcl::PointXYZRGBA>::Ptr rgb_cloud (new pcl::PointCloud<pcl::PointXYZRGBA>);
+        pcl::PointCloud<pcl::PointXYZ>::Ptr cloud (new pcl::PointCloud<pcl::PointXYZ>);
 
         boost::shared_ptr<PairOfImages> rawimages (new PairOfImages);
         boost::shared_ptr<PairOfImages> rectifiedimages (new PairOfImages);
@@ -717,30 +716,12 @@ void pcl::EnsensoGrabber::processGrabbing ()
         fps_mutex_.unlock ();
         last = now;
 
-        NxLibCommand (cmdTrigger).execute();
-        NxLibCommand retrieve(cmdRetrieve);
-        while (running_)
-        {
-            try {
-                retrieve.parameters()[itmTimeout] = 1000;   // to wait copy image
-                retrieve.execute();
-                bool retrievedIR = retrieve.result()[camera_[itmSerialNumber].asString().c_str()][itmRetrieved].asBool();
-                bool retrievedRGB = use_rgb_ ? retrieve.result()[monocam_[itmSerialNumber].asString().c_str()][itmRetrieved].asBool() : true;
-                if (retrievedIR && retrievedRGB)
-                {
-                  break;
-                }
-            }
-            catch (const NxLibException &ex) {
-                // To ignore timeout exception and others
-            }
-        }
+        triggerCameras();
         if (!running_) {
             return;
         }
         //get timestamp of aquired image
-        double timestamp;
-        camera_[itmImages][itmRaw][itmLeft].getBinaryDataInfo (0, 0, 0, 0, 0, &timestamp);
+        camera_[itmImages][itmRaw][itmLeft].getBinaryDataInfo (0, 0, 0, 0, 0, &timestamp_);
         bool rectified = false;
         // Gather point cloud
         if (num_slots<sig_cb_ensenso_point_cloud> () > 0 || num_slots<sig_cb_ensenso_point_cloud_images> () > 0 || num_slots<sig_cb_ensenso_point_cloud_images_rgb> () > 0)
@@ -751,71 +732,12 @@ void pcl::EnsensoGrabber::processGrabbing ()
           // Convert disparity map into XYZ data for each pixel
           if (use_rgb_ && mono_device_open_)
           {
-            NxLibCommand renderPM (cmdRenderPointMap);
-            renderPM.parameters()[itmCamera].set(monocam_[itmSerialNumber].asString());
-            renderPM.parameters()[itmNear].set(near_plane_);
-            renderPM.parameters()[itmFar].set(far_plane_);
-            renderPM.execute ();
+            getDepthDataRGB(rgb_cloud, depthimage);
+
           }
           else
           {
-            NxLibCommand (cmdComputePointMap).execute ();
-          }
-          // Get info about the computed point map and copy it into a std::vector
-          std::vector<float> pointMap;
-          std::vector<char> rgbData;
-          int width, height;
-          if (use_rgb_ && mono_device_open_)
-          {
-            (*root_)[itmImages][itmRenderPointMap].getBinaryDataInfo (&width, &height, 0, 0, 0, 0);
-            (*root_)[itmImages][itmRenderPointMap].getBinaryData (pointMap, 0);
-            (*root_)[itmImages][itmRenderPointMapTexture].getBinaryDataInfo (&width, &height, 0, 0, 0, 0);
-            (*root_)[itmImages][itmRenderPointMapTexture].getBinaryData (rgbData, 0);
-          }
-          else
-          {
-            camera_[itmImages][itmPointMap].getBinaryDataInfo (&width, &height, 0, 0, 0, 0);
-            camera_[itmImages][itmPointMap].getBinaryData (pointMap, 0);
-          }
-          // Copy point f and convert in meters
-          cloud->header.stamp = getPCLStamp (timestamp);
-          cloud->points.resize (height * width);
-          cloud->width = width;
-          cloud->height = height;
-          cloud->is_dense = false;
-          //copy depth info to image
-          depthimage->header.stamp = getPCLStamp (timestamp);
-          depthimage->width = width;
-          depthimage->height = height;
-          depthimage->data.resize (width * height);
-          depthimage->encoding = "CV_32FC1";
-          // Copy data in point cloud (and convert milimeters in meters)
-          if (use_rgb_ && mono_device_open_)
-          {
-            for (size_t i = 0; i < pointMap.size (); i += 3)
-            {
-              depthimage->data[i / 3] = pointMap[i + 2] / 1000.0;
-              cloud->points[i / 3].x = (pointMap[i] + rgb_trans_x) / 1000.0;
-              cloud->points[i / 3].y = (pointMap[i + 1] + rgb_trans_y) / 1000.0;
-              cloud->points[i / 3].z = pointMap[i + 2] / 1000.0;
-            }
-            for (size_t i = 0; i < rgbData.size (); i += 4)
-            {
-              cloud->points[i / 4].r = rgbData[i];
-              cloud->points[i / 4].g = rgbData[i + 1];
-              cloud->points[i / 4].b = rgbData[i + 2];
-              cloud->points[i / 4].a = rgbData[i + 3];
-            }
-          }
-          else
-          {
-            for (size_t i = 0; i < pointMap.size (); i += 3)
-            {
-              depthimage->data[i / 3] = pointMap[i + 2] / 1000.0;
-              cloud->points[i / 3].x = pointMap[i] / 1000.0;
-              cloud->points[i / 3].y = pointMap[i + 1] / 1000.0;
-              cloud->points[i / 3].z = pointMap[i + 2] / 1000.0;
-            }
+            getDepthData(cloud, depthimage);
           }
         }
         // Gather images
@@ -829,8 +751,7 @@ void pcl::EnsensoGrabber::processGrabbing ()
             NxLibCommand rectify_images (cmdRectifyImages);
             rectify_images.execute ();
           }
-          int width, height, channels, bpe;
-          bool isFlt, collected_pattern = false;
+          bool collected_pattern = false;
           // Try to collect calibration pattern and overlay it to the raw image
           // If store_calibration_pattern_ is true, it estimates the pattern pose and store it at last_stereo_pattern_
           if (store_calibration_pattern_)
@@ -839,10 +760,7 @@ void pcl::EnsensoGrabber::processGrabbing ()
           {
             try
             {
-              NxLibCommand collect_pattern (cmdCollectPattern);
-              collect_pattern.parameters ()[itmBuffer].set (store_calibration_pattern_);
-              collect_pattern.parameters ()[itmDecodeData].set (true);
-              collect_pattern.execute ();
+              collectPattern(store_calibration_pattern_, true);
               if (store_calibration_pattern_)
               {
                 // estimatePatternPose() takes ages, so, we use the raw data
@@ -862,86 +780,34 @@ void pcl::EnsensoGrabber::processGrabbing ()
               // if failed to collect the pattern will read the RAW images anyway.
             }
           }
+
           if (find_pattern_ && collected_pattern)
           {
             if (use_rgb_)
             {
-              monocam_[itmImages][itmWithOverlay].getBinaryDataInfo (&width, &height, &channels, &bpe, &isFlt, 0);
-              rgbimages->first.header.stamp = getPCLStamp (timestamp);
-              rgbimages->first.width = width;
-              rgbimages->first.height = height;
-              rgbimages->first.data.resize (width * height * sizeof(float));
-              rgbimages->first.encoding = getOpenCVType (channels, bpe, isFlt);
-              monocam_[itmImages][itmWithOverlay].getBinaryData (rgbimages->first.data.data (), rgbimages->first.data.size (), 0, 0);
-
-              monocam_[itmImages][itmRectified].getBinaryDataInfo (&width, &height, &channels, &bpe, &isFlt, 0);
-              rgbimages->second.header.stamp = getPCLStamp (timestamp);
-              rgbimages->second.width = width;
-              rgbimages->second.height = height;
-              rgbimages->second.data.resize (width * height * sizeof(float));
-              rgbimages->second.encoding = getOpenCVType (channels, bpe, isFlt);
-              monocam_[itmImages][itmRectified].getBinaryData (rgbimages->second.data.data (), rgbimages->second.data.size (), 0, 0);
+              getImage(monocam_[itmImages][itmWithOverlay], rgbimages->first);
+              getImage(monocam_[itmImages][itmRectified], rgbimages->second);
             }
-            camera_[itmImages][itmWithOverlay][itmLeft].getBinaryDataInfo (&width, &height, &channels, &bpe, &isFlt, 0);
-            rawimages->first.header.stamp = rawimages->second.header.stamp = getPCLStamp (timestamp);
-            rawimages->first.width = rawimages->second.width = width;
-            rawimages->first.height = rawimages->second.height = height;
-            rawimages->first.data.resize (width * height * sizeof(float));
-            rawimages->second.data.resize (width * height * sizeof(float));
-            rawimages->first.encoding = rawimages->second.encoding = getOpenCVType (channels, bpe, isFlt);
-            camera_[itmImages][itmWithOverlay][itmLeft].getBinaryData (rawimages->first.data.data (), rawimages->first.data.size (), 0, 0);
-            camera_[itmImages][itmWithOverlay][itmRight].getBinaryData (rawimages->second.data.data (), rawimages->second.data.size (), 0, 0);
+            //images with overlay
+            getImage(camera_[itmImages][itmWithOverlay][itmLeft], rawimages->first);
+            getImage(camera_[itmImages][itmWithOverlay][itmRight], rawimages->second);
             // rectifiedimages
-            camera_[itmImages][itmRectified][itmLeft].getBinaryDataInfo (&width, &height, &channels, &bpe, &isFlt, 0);
-            rectifiedimages->first.width = rectifiedimages->second.width = width;
-            rectifiedimages->first.height = rectifiedimages->second.height = height;
-            rectifiedimages->first.data.resize (width * height * sizeof(float));
-            rectifiedimages->second.data.resize (width * height * sizeof(float));
-            rectifiedimages->first.encoding = rectifiedimages->second.encoding = getOpenCVType (channels, bpe, isFlt);
-            camera_[itmImages][itmRectified][itmLeft].getBinaryData (rectifiedimages->first.data.data (), rectifiedimages->first.data.size (), 0, 0);
-            camera_[itmImages][itmRectified][itmRight].getBinaryData (rectifiedimages->second.data.data (), rectifiedimages->second.data.size (), 0, 0);
           }
           else
           {
             if (use_rgb_)
             {
               //get RGB raw and rect image
-              monocam_[itmImages][itmRaw].getBinaryDataInfo (&width, &height, &channels, &bpe, &isFlt, 0);
-              rgbimages->first.header.stamp = getPCLStamp (timestamp);
-              rgbimages->first.width = width;
-              rgbimages->first.height = height;
-              rgbimages->first.data.resize (width * height * sizeof(float));
-              rgbimages->first.encoding = getOpenCVType (channels, bpe, isFlt);
-              monocam_[itmImages][itmRaw].getBinaryData (rgbimages->first.data.data (), rgbimages->first.data.size (), 0, 0);
-
-              monocam_[itmImages][itmRectified].getBinaryDataInfo (&width, &height, &channels, &bpe, &isFlt, 0);
-              rgbimages->second.header.stamp = getPCLStamp (timestamp);
-              rgbimages->second.width = width;
-              rgbimages->second.height = height;
-              rgbimages->second.data.resize (width * height * sizeof(float));
-              rgbimages->second.encoding = getOpenCVType (channels, bpe, isFlt);
-              monocam_[itmImages][itmRectified].getBinaryData (rgbimages->second.data.data (), rgbimages->second.data.size (), 0, 0);
+              getImage(monocam_[itmImages][itmRaw], rgbimages->first);
+              getImage(monocam_[itmImages][itmRectified], rgbimages->second);
             }
             // get left / right raw images
-            camera_[itmImages][itmRaw][itmLeft].getBinaryDataInfo (&width, &height, &channels, &bpe, &isFlt, 0);
-            rawimages->first.header.stamp = rawimages->second.header.stamp = getPCLStamp (timestamp);
-            rawimages->first.width = rawimages->second.width = width;
-            rawimages->first.height = rawimages->second.height = height;
-            rawimages->first.data.resize (width * height * sizeof(float));
-            rawimages->second.data.resize (width * height * sizeof(float));
-            rawimages->first.encoding = rawimages->second.encoding = getOpenCVType (channels, bpe, isFlt);
-            camera_[itmImages][itmRaw][itmLeft].getBinaryData (rawimages->first.data.data (), rawimages->first.data.size (), 0, 0);
-            camera_[itmImages][itmRaw][itmRight].getBinaryData (rawimages->second.data.data (), rawimages->second.data.size (), 0, 0);
-            // rectifiedimages
-            camera_[itmImages][itmRectified][itmLeft].getBinaryDataInfo (&width, &height, &channels, &bpe, &isFlt, 0);
-            rectifiedimages->first.width = rectifiedimages->second.width = width;
-            rectifiedimages->first.height = rectifiedimages->second.height = height;
-            rectifiedimages->first.data.resize (width * height * sizeof(float));
-            rectifiedimages->second.data.resize (width * height * sizeof(float));
-            rectifiedimages->first.encoding = rectifiedimages->second.encoding = getOpenCVType (channels, bpe, isFlt);
-            camera_[itmImages][itmRectified][itmLeft].getBinaryData (rectifiedimages->first.data.data (), rectifiedimages->first.data.size (), 0, 0);
-            camera_[itmImages][itmRectified][itmRight].getBinaryData (rectifiedimages->second.data.data (), rectifiedimages->second.data.size (), 0, 0);
+            getImage(camera_[itmImages][itmRaw][itmLeft], rawimages->first);
+            getImage(camera_[itmImages][itmRaw][itmRight], rawimages->second);
           }
+          //get rectified images
+          getImage(camera_[itmImages][itmRectified][itmLeft], rectifiedimages->first);
+          getImage(camera_[itmImages][itmRectified][itmRight], rectifiedimages->second);
         }
 
         // Publish signals
@@ -957,9 +823,13 @@ void pcl::EnsensoGrabber::processGrabbing ()
         {
           images_signal_->operator () (rawimages,rectifiedimages, depthimage);
         }
+        else if (num_slots<sig_cb_ensenso_point_cloud_rgb> () > 0)
+        {
+          point_cloud_rgb_signal_->operator () (rgb_cloud);
+        }
         else if (num_slots<sig_cb_ensenso_point_cloud_images_rgb> () > 0)
         {
-          point_cloud_images_signal_rgb_->operator () (cloud, rawimages, rectifiedimages, rgbimages, depthimage);
+          point_cloud_images_signal_rgb_->operator () (rgb_cloud, rawimages, rectifiedimages, rgbimages, depthimage);
         }
         else if (num_slots<sig_cb_ensenso_images_rgb> () > 0)
         {
@@ -973,6 +843,117 @@ void pcl::EnsensoGrabber::processGrabbing ()
       ensensoExceptionHandling (ex, "processGrabbing");
     }
   }
+}
+
+void pcl::EnsensoGrabber::getDepthDataRGB(const pcl::PointCloud<pcl::PointXYZRGBA>::Ptr& cloud, const pcl::PCLGenImage<float>::Ptr& depthimage)
+{
+  NxLibCommand renderPM (cmdRenderPointMap);
+  renderPM.parameters()[itmCamera].set(monocam_[itmSerialNumber].asString());
+  renderPM.parameters()[itmNear].set(near_plane_);
+  renderPM.parameters()[itmFar].set(far_plane_);
+  renderPM.execute ();
+
+  int width, height;
+  std::vector<float> pointMap;
+  std::vector<char> rgbData;
+  (*root_)[itmImages][itmRenderPointMap].getBinaryDataInfo (&width, &height, 0, 0, 0, 0);
+  (*root_)[itmImages][itmRenderPointMap].getBinaryData (pointMap, 0);
+  (*root_)[itmImages][itmRenderPointMapTexture].getBinaryDataInfo (&width, &height, 0, 0, 0, 0);
+  (*root_)[itmImages][itmRenderPointMapTexture].getBinaryData (rgbData, 0);
+
+  // Copy point f and convert in meters
+  cloud->header.stamp = getPCLStamp (timestamp_);
+  cloud->points.resize (height * width);
+  cloud->width = width;
+  cloud->height = height;
+  cloud->is_dense = false;
+  //copy depth info to image
+  depthimage->header.stamp = getPCLStamp (timestamp_);
+  depthimage->width = width;
+  depthimage->height = height;
+  depthimage->data.resize (width * height);
+  depthimage->encoding = "CV_32FC1";
+
+  for (size_t i = 0; i < pointMap.size (); i += 3)
+  {
+    depthimage->data[i / 3] = pointMap[i + 2] / 1000.0;
+    cloud->points[i / 3].x = (pointMap[i] + translation_to_rgb_.x) / 1000.0;
+    cloud->points[i / 3].y = (pointMap[i + 1] + translation_to_rgb_.y) / 1000.0;
+    cloud->points[i / 3].z = pointMap[i + 2] / 1000.0;
+  }
+  for (size_t i = 0; i < rgbData.size (); i += 4)
+  {
+    cloud->points[i / 4].r = rgbData[i];
+    cloud->points[i / 4].g = rgbData[i + 1];
+    cloud->points[i / 4].b = rgbData[i + 2];
+    cloud->points[i / 4].a = rgbData[i + 3];
+  }
+}
+
+void pcl::EnsensoGrabber::getDepthData(const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud, const pcl::PCLGenImage<float>::Ptr& depthimage)
+{
+  NxLibCommand (cmdComputePointMap).execute ();
+  int width, height;
+  std::vector<float> pointMap;
+  camera_[itmImages][itmPointMap].getBinaryDataInfo (&width, &height, 0, 0, 0, 0);
+  camera_[itmImages][itmPointMap].getBinaryData (pointMap, 0);
+
+    // Copy point f and convert in meters
+  cloud->header.stamp = getPCLStamp (timestamp_);
+  cloud->points.resize (height * width);
+  cloud->width = width;
+  cloud->height = height;
+  cloud->is_dense = false;
+  //copy depth info to image
+  depthimage->header.stamp = getPCLStamp (timestamp_);
+  depthimage->width = width;
+  depthimage->height = height;
+  depthimage->data.resize (width * height);
+  depthimage->encoding = "CV_32FC1";
+
+  for (size_t i = 0; i < pointMap.size (); i += 3)
+  {
+    depthimage->data[i / 3] = pointMap[i + 2] / 1000.0;
+    cloud->points[i / 3].x = pointMap[i] / 1000.0;
+    cloud->points[i / 3].y = pointMap[i + 1] / 1000.0;
+    cloud->points[i / 3].z = pointMap[i + 2] / 1000.0;
+  }
+}
+
+
+void pcl::EnsensoGrabber::triggerCameras()
+{
+  NxLibCommand (cmdTrigger).execute();
+  NxLibCommand retrieve(cmdRetrieve);
+  while (running_)
+  {
+    try {
+        retrieve.parameters()[itmTimeout] = 1000;   // to wait copy image
+        retrieve.execute();
+        bool retrievedIR = retrieve.result()[camera_[itmSerialNumber].asString().c_str()][itmRetrieved].asBool();
+        bool retrievedRGB = use_rgb_ ? retrieve.result()[monocam_[itmSerialNumber].asString().c_str()][itmRetrieved].asBool() : true;
+        if (retrievedIR && retrievedRGB)
+        {
+          break;
+        }
+    }
+    catch (const NxLibException &ex) {
+        // To ignore timeout exception and others
+    }
+  }
+}
+
+void pcl::EnsensoGrabber::getImage(const NxLibItem& image_node, pcl::PCLGenImage<pcl::uint8_t>& image_out)
+{
+  int width, height, channels, bpe;
+  bool isFlt;
+  image_node.getBinaryDataInfo (&width, &height, &channels, &bpe, &isFlt, 0);
+  image_out.header.stamp = getPCLStamp (timestamp_);
+  image_out.width = width;
+  image_out.height = height;
+  image_out.data.resize (width * height * sizeof(float));
+  image_out.encoding = getOpenCVType (channels, bpe, isFlt);
+  image_node.getBinaryData (image_out.data.data (), image_out.data.size (), 0, 0);
 }
 
 void pcl::EnsensoGrabber::storeCalibrationPattern (const bool enable)
