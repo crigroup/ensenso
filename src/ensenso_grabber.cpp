@@ -339,10 +339,14 @@ bool pcl::EnsensoGrabber::getCameraInfo(std::string cam, sensor_msgs::CameraInfo
     {
       for(std::size_t j = 0; j < 3; ++j)
       {
-        cam_info.K[3*i+j] = cameraMat[j][i].asDouble();
         if (cam != "RGB")
         {
           cam_info.R[3*i+j] = camera[itmCalibration][itmDynamic][itmStereo][cam][itmRotation][j][i].asDouble();
+          cam_info.K[3*i+j] = camera_[itmCalibration][itmMonocular][cam][itmCamera][j][i].asDouble();
+        }
+        else
+        {
+          cam_info.K[3*i+j] = cameraMat[j][i].asDouble();
         }
       }
     }
