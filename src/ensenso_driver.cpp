@@ -249,6 +249,7 @@ class EnsensoDriver
       ROS_DEBUG_STREAM("ShadowingThreshold: " << config.ShadowingThreshold);
       ROS_DEBUG("Postprocessing Parameters");
       ROS_DEBUG_STREAM("Find Pattern: "   << std::boolalpha << config.FindPattern);
+      ROS_WARN_STREAM("The calibration pattern will not be searched for, calibration will not work.");
       ROS_DEBUG_STREAM("UniquenessRatio: " << config.UniquenessRatio);
       ROS_DEBUG_STREAM("MedianFilterRadius: "<< config.MedianFilterRadius);
       ROS_DEBUG_STREAM("SpeckleComponentThreshold: "<< config.SpeckleComponentThreshold);

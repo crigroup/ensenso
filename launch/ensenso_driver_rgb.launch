@@ -58,7 +58,7 @@
     <param name="SpeckleRegionSize"         type="int" value="150" />
     <param name="FillBorderSpread"          type="int" value="3" />
     <param name="FillRegionSize"            type="int" value="150" />
-    <param name="FindPattern"            type="bool" value="false" />
+    <param name="FindPattern"            type="bool" value="true" />
     <!-- Render parameters -->
     <param name="SurfaceConnectivity"            type="int" value="3" />
     <param name="NearPlane"            type="int" value="50" />
