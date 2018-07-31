@@ -115,7 +115,7 @@ public:
      * @param[in] buffer Specifies whether the pattern should be added to the pattern buffer.
      * @return the number of calibration patterns stored in the @code nxTree @endcode , -1 on error
      * @warning A device must be opened and must not be running.*/
-    int collectPattern (const bool buffer = true, const bool decode_data = false) const;
+    int collectPattern (const bool buffer=true) const;
     
     /** @brief Decodes the pattern grid size and thickness
      * @return the grid size in mm*/

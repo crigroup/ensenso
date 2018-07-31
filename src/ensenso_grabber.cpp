@@ -213,7 +213,7 @@ bool pcl::EnsensoGrabber::closeTcpPort ()
   return (true);
 }
 
-int pcl::EnsensoGrabber::collectPattern (const bool buffer, const bool decode_data) const
+int pcl::EnsensoGrabber::collectPattern (const bool buffer) const
 {
   if (!device_open_ || running_)
     return (-1);
@@ -222,7 +222,7 @@ int pcl::EnsensoGrabber::collectPattern (const bool buffer, const bool decode_da
     NxLibCommand (cmdCapture).execute ();
     NxLibCommand collect_pattern (cmdCollectPattern);
     collect_pattern.parameters ()[itmBuffer].set (buffer);
-    collect_pattern.parameters ()[itmDecodeData].set (decode_data);
+    collect_pattern.parameters ()[itmDecodeData].set (false);
     collect_pattern.execute ();
   }
   catch (NxLibException &ex)
@@ -761,7 +761,10 @@ void pcl::EnsensoGrabber::processGrabbing ()
           {
             try
             {
-              collectPattern(store_calibration_pattern_, true);
+              NxLibCommand collect_pattern (cmdCollectPattern);
+              collect_pattern.parameters ()[itmBuffer].set (store_calibration_pattern_);
+              collect_pattern.parameters ()[itmDecodeData].set (true);
+              collect_pattern.execute ();
               if (store_calibration_pattern_)
               {
                 // estimatePatternPose() takes ages, so, we use the raw data
@@ -781,7 +784,6 @@ void pcl::EnsensoGrabber::processGrabbing ()
               // if failed to collect the pattern will read the RAW images anyway.
             }
           }
-
           if (find_pattern_ && collected_pattern)
           {
             if (use_rgb_)
