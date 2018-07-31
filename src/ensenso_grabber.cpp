@@ -324,8 +324,8 @@ bool pcl::EnsensoGrabber::getCameraInfo(std::string cam, sensor_msgs::CameraInfo
       cam  = use_rgb_ ? "RGB" : "Left";
     }
     NxLibItem camera = (cam == "RGB" ) ? monocam_ : camera_;
-    NxLibItem cameraMat = (cam == "RGB") ? monocam_[itmCalibration][itmCamera] : camera_[itmCalibration][itmDynamic][itmStereo][cam][itmCamera];
-    NxLibItem cameraDist = (cam == "RGB") ? monocam_[itmCalibration][itmDistortion] : camera_[itmCalibration][itmMonocular][cam][itmDistortion];
+    NxLibItem camera_mat = (cam == "RGB") ? monocam_[itmCalibration][itmCamera] : camera_[itmCalibration][itmDynamic][itmStereo][cam][itmCamera];
+    NxLibItem camera_dist = (cam == "RGB") ? monocam_[itmCalibration][itmDistortion] : camera_[itmCalibration][itmMonocular][cam][itmDistortion];
 
     cam_info.width = camera[itmSensor][itmSize][0].asInt();
     cam_info.height = camera[itmSensor][itmSize][1].asInt();
@@ -333,7 +333,7 @@ bool pcl::EnsensoGrabber::getCameraInfo(std::string cam, sensor_msgs::CameraInfo
     // Distorsion factors
     cam_info.D.resize(5);
     for(std::size_t i = 0; i < cam_info.D.size(); ++i)
-        cam_info.D[i] = cameraDist[i].asDouble();
+        cam_info.D[i] = camera_dist[i].asDouble();
     // K and R matrices
     for(std::size_t i = 0; i < 3; ++i)
     {
@@ -346,7 +346,7 @@ bool pcl::EnsensoGrabber::getCameraInfo(std::string cam, sensor_msgs::CameraInfo
         }
         else
         {
-          cam_info.K[3*i+j] = cameraMat[j][i].asDouble();
+          cam_info.K[3*i+j] = camera_mat[j][i].asDouble();
         }
       }
     }
@@ -357,14 +357,14 @@ bool pcl::EnsensoGrabber::getCameraInfo(std::string cam, sensor_msgs::CameraInfo
       cam_info.R[8] = 1.0;
     }
     //first row
-    cam_info.P[0] = cameraMat[0][0].asDouble();
-    cam_info.P[1] = cameraMat[1][0].asDouble();
-    cam_info.P[2] = cameraMat[2][0].asDouble();
+    cam_info.P[0] = camera_mat[0][0].asDouble();
+    cam_info.P[1] = camera_mat[1][0].asDouble();
+    cam_info.P[2] = camera_mat[2][0].asDouble();
     cam_info.P[3] = 0.0;
     //second row
-    cam_info.P[4] = cameraMat[0][1].asDouble();
-    cam_info.P[5] = cameraMat[1][1].asDouble();
-    cam_info.P[6] = cameraMat[2][1].asDouble();
+    cam_info.P[4] = camera_mat[0][1].asDouble();
+    cam_info.P[5] = camera_mat[1][1].asDouble();
+    cam_info.P[6] = camera_mat[2][1].asDouble();
     cam_info.P[7] = 0.0;
     //third row
     cam_info.P[8] = 0.0;
@@ -408,16 +408,16 @@ bool pcl::EnsensoGrabber::getTFtoRGB(geometry_msgs::TransformStamped& tf) const
         transform(j,i) = convert.result()[itmTransformation][i][j].asDouble();
       }
     }
-    Eigen::Affine3d invTransform = transform.inverse();
-    Eigen::Quaterniond q(invTransform.rotation()); //from stereo to rgb
+    Eigen::Affine3d inv_transform = transform.inverse();
+    Eigen::Quaterniond q(inv_transform.rotation()); //from stereo to rgb
     q.normalize();
     tf.transform.rotation.x = q.x();
     tf.transform.rotation.y = q.y();
     tf.transform.rotation.z = q.z();
     tf.transform.rotation.w = q.w();
-    tf.transform.translation.x = invTransform.translation().x() / 1000.0;
-    tf.transform.translation.y = invTransform.translation().y() / 1000.0;
-    tf.transform.translation.z = invTransform.translation().z() / 1000.0;
+    tf.transform.translation.x = inv_transform.translation().x() / 1000.0;
+    tf.transform.translation.y = inv_transform.translation().y() / 1000.0;
+    tf.transform.translation.z = inv_transform.translation().z() / 1000.0;
   }
   catch (NxLibException &ex)
   {
@@ -717,6 +717,7 @@ void pcl::EnsensoGrabber::processGrabbing ()
         last = now;
 
         triggerCameras();
+        
         if (!running_) {
             return;
         }
@@ -791,7 +792,6 @@ void pcl::EnsensoGrabber::processGrabbing ()
             //images with overlay
             getImage(camera_[itmImages][itmWithOverlay][itmLeft], rawimages->first);
             getImage(camera_[itmImages][itmWithOverlay][itmRight], rawimages->second);
-            // rectifiedimages
           }
           else
           {
@@ -854,12 +854,12 @@ void pcl::EnsensoGrabber::getDepthDataRGB(const pcl::PointCloud<pcl::PointXYZRGB
   renderPM.execute ();
 
   int width, height;
-  std::vector<float> pointMap;
-  std::vector<char> rgbData;
+  std::vector<float> point_map;
+  std::vector<char> rgb_data;
   (*root_)[itmImages][itmRenderPointMap].getBinaryDataInfo (&width, &height, 0, 0, 0, 0);
-  (*root_)[itmImages][itmRenderPointMap].getBinaryData (pointMap, 0);
+  (*root_)[itmImages][itmRenderPointMap].getBinaryData (point_map, 0);
   (*root_)[itmImages][itmRenderPointMapTexture].getBinaryDataInfo (&width, &height, 0, 0, 0, 0);
-  (*root_)[itmImages][itmRenderPointMapTexture].getBinaryData (rgbData, 0);
+  (*root_)[itmImages][itmRenderPointMapTexture].getBinaryData (rgb_data, 0);
 
   // Copy point f and convert in meters
   cloud->header.stamp = getPCLStamp (timestamp_);
@@ -874,19 +874,19 @@ void pcl::EnsensoGrabber::getDepthDataRGB(const pcl::PointCloud<pcl::PointXYZRGB
   depthimage->data.resize (width * height);
   depthimage->encoding = "CV_32FC1";
 
-  for (size_t i = 0; i < pointMap.size (); i += 3)
+  for (size_t i = 0; i < point_map.size (); i += 3)
   {
-    depthimage->data[i / 3] = pointMap[i + 2] / 1000.0;
-    cloud->points[i / 3].x = (pointMap[i] + translation_to_rgb_.x) / 1000.0;
-    cloud->points[i / 3].y = (pointMap[i + 1] + translation_to_rgb_.y) / 1000.0;
-    cloud->points[i / 3].z = pointMap[i + 2] / 1000.0;
+    depthimage->data[i / 3] = point_map[i + 2] / 1000.0;
+    cloud->points[i / 3].x = (point_map[i] + translation_to_rgb_.x) / 1000.0;
+    cloud->points[i / 3].y = (point_map[i + 1] + translation_to_rgb_.y) / 1000.0;
+    cloud->points[i / 3].z = point_map[i + 2] / 1000.0;
   }
-  for (size_t i = 0; i < rgbData.size (); i += 4)
+  for (size_t i = 0; i < rgb_data.size (); i += 4)
   {
-    cloud->points[i / 4].r = rgbData[i];
-    cloud->points[i / 4].g = rgbData[i + 1];
-    cloud->points[i / 4].b = rgbData[i + 2];
-    cloud->points[i / 4].a = rgbData[i + 3];
+    cloud->points[i / 4].r = rgb_data[i];
+    cloud->points[i / 4].g = rgb_data[i + 1];
+    cloud->points[i / 4].b = rgb_data[i + 2];
+    cloud->points[i / 4].a = rgb_data[i + 3];
   }
 }
 
@@ -894,9 +894,9 @@ void pcl::EnsensoGrabber::getDepthData(const pcl::PointCloud<pcl::PointXYZ>::Ptr
 {
   NxLibCommand (cmdComputePointMap).execute ();
   int width, height;
-  std::vector<float> pointMap;
+  std::vector<float> point_map;
   camera_[itmImages][itmPointMap].getBinaryDataInfo (&width, &height, 0, 0, 0, 0);
-  camera_[itmImages][itmPointMap].getBinaryData (pointMap, 0);
+  camera_[itmImages][itmPointMap].getBinaryData (point_map, 0);
 
     // Copy point f and convert in meters
   cloud->header.stamp = getPCLStamp (timestamp_);
@@ -911,12 +911,12 @@ void pcl::EnsensoGrabber::getDepthData(const pcl::PointCloud<pcl::PointXYZ>::Ptr
   depthimage->data.resize (width * height);
   depthimage->encoding = "CV_32FC1";
 
-  for (size_t i = 0; i < pointMap.size (); i += 3)
+  for (size_t i = 0; i < point_map.size (); i += 3)
   {
-    depthimage->data[i / 3] = pointMap[i + 2] / 1000.0;
-    cloud->points[i / 3].x = pointMap[i] / 1000.0;
-    cloud->points[i / 3].y = pointMap[i + 1] / 1000.0;
-    cloud->points[i / 3].z = pointMap[i + 2] / 1000.0;
+    depthimage->data[i / 3] = point_map[i + 2] / 1000.0;
+    cloud->points[i / 3].x = point_map[i] / 1000.0;
+    cloud->points[i / 3].y = point_map[i + 1] / 1000.0;
+    cloud->points[i / 3].z = point_map[i + 2] / 1000.0;
   }
 }
 
