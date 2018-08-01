@@ -498,30 +498,24 @@ class EnsensoDriver
       }
     }
 
-    void imagesCallback( const boost::shared_ptr<PairOfImages>& rawimages, const boost::shared_ptr<PairOfImages>& rectifiedimages,
-                         const boost::shared_ptr<pcl::PCLGenImage<float> >& depthimage)
+    void imagesCallback( const boost::shared_ptr<PairOfImages>& rawimages, const boost::shared_ptr<PairOfImages>& rectifiedimages)
     {
       ros::Time stamp;
-      //stamp is the same for all images/cloud
-      pcl_conversions::fromPCL(depthimage->header.stamp, stamp);
+      //stamp is the same for all images
+      pcl_conversions::fromPCL(rawimages->first.header.stamp, stamp);
       // Get cameras info
       sensor_msgs::CameraInfo linfo, rinfo, dinfo;
       ensenso_ptr_->getCameraInfo("Left", linfo);
       ensenso_ptr_->getCameraInfo("Right", rinfo);
-      ensenso_ptr_->getCameraInfo("Depth", dinfo);
       linfo.header.stamp = stamp;
       linfo.header.frame_id = camera_frame_id_;
       rinfo.header.stamp = stamp;
       rinfo.header.frame_id = camera_frame_id_;
-      dinfo.header.stamp = stamp;
-      dinfo.header.frame_id = camera_frame_id_;
       // Images
       if (l_raw_pub_.getNumSubscribers() > 0)
         l_raw_pub_.publish(*toImageMsg(rawimages->first, stamp, camera_frame_id_), linfo, stamp);
       if (r_raw_pub_.getNumSubscribers() > 0)
         r_raw_pub_.publish(*toImageMsg(rawimages->second, stamp, camera_frame_id_), rinfo, stamp);
-      if (depth_pub_.getNumSubscribers() > 0)
-        depth_pub_.publish(*toImageMsg(*depthimage, stamp,camera_frame_id_), dinfo, stamp);
       if (l_rectified_pub_.getNumSubscribers() > 0)
         l_rectified_pub_.publish(toImageMsg(rectifiedimages->first, stamp, camera_frame_id_));
       if (r_rectified_pub_.getNumSubscribers() > 0)
@@ -531,27 +525,23 @@ class EnsensoDriver
     }
 
     void imagesRGBCallback( const boost::shared_ptr<PairOfImages>& rawimages, const boost::shared_ptr<PairOfImages>& rectifiedimages,
-                            const boost::shared_ptr<PairOfImages>& rgbimages, const boost::shared_ptr<pcl::PCLGenImage<float> >& depthimage)
+                            const boost::shared_ptr<PairOfImages>& rgbimages)
     {
       ros::Time stamp;
       //stamp is the same for all images/cloud
-      pcl_conversions::fromPCL(depthimage->header.stamp, stamp);
+      pcl_conversions::fromPCL(rawimages->first.header.stamp, stamp);
       // Get cameras info
       sensor_msgs::CameraInfo linfo, rinfo, rgbinfo, dinfo;
       ensenso_ptr_->getCameraInfo("Left", linfo);
       ensenso_ptr_->getCameraInfo("Right", rinfo);
       ensenso_ptr_->getCameraInfo("RGB", rinfo);
-      ensenso_ptr_->getCameraInfo("Depth", dinfo);
       linfo.header.stamp = stamp;
       linfo.header.frame_id = camera_frame_id_;
       rinfo.header.stamp = stamp;
       rinfo.header.frame_id = camera_frame_id_;
       rgbinfo.header.stamp = stamp;
       rgbinfo.header.frame_id = rgb_camera_frame_id_;
-      dinfo.header.stamp = stamp;
-      dinfo.header.frame_id = rgb_camera_frame_id_;
 
-      depthimage->header.frame_id = rgb_camera_frame_id_;
       //TF
       publishTF(stamp);
       // Images
@@ -567,8 +557,6 @@ class EnsensoDriver
         rgb_raw_pub_.publish(*toImageMsg(rgbimages->first, stamp, rgb_camera_frame_id_), rgbinfo, stamp);
       if (rgb_rectified_pub_.getNumSubscribers() > 0)
         rgb_rectified_pub_.publish(toImageMsg(rgbimages->second, stamp, rgb_camera_frame_id_));
-      if (depth_pub_.getNumSubscribers() > 0)
-        depth_pub_.publish(*toImageMsg(*depthimage, stamp, rgb_camera_frame_id_), dinfo, stamp);
       // Publish calibration pattern info (if any)
       publishCalibrationPattern(stamp);
     }
