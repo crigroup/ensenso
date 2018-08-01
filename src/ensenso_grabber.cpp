@@ -823,7 +823,7 @@ void pcl::EnsensoGrabber::processGrabbing ()
         }
         else if (num_slots<sig_cb_ensenso_images> () > 0)
         {
-          images_signal_->operator () (rawimages,rectifiedimages, depthimage);
+          images_signal_->operator () (rawimages,rectifiedimages);
         }
         else if (num_slots<sig_cb_ensenso_point_cloud_rgb> () > 0)
         {
@@ -835,7 +835,7 @@ void pcl::EnsensoGrabber::processGrabbing ()
         }
         else if (num_slots<sig_cb_ensenso_images_rgb> () > 0)
         {
-          images_signal_rgb_->operator () (rawimages,rectifiedimages, rgbimages, depthimage);
+          images_signal_rgb_->operator () (rawimages,rectifiedimages, rgbimages);
         }
       }
       continue_grabbing = running_;

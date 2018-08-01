@@ -405,16 +405,14 @@ class EnsensoDriver
             boost::function<void(
               const boost::shared_ptr<PairOfImages>&,
               const boost::shared_ptr<PairOfImages>&,
-              const boost::shared_ptr<PairOfImages>&,
-              const boost::shared_ptr<pcl::PCLGenImage<float> >&)> f = boost::bind (&EnsensoDriver::imagesRGBCallback, this, _1, _2, _3, _4);
+              const boost::shared_ptr<PairOfImages>&)> f = boost::bind (&EnsensoDriver::imagesRGBCallback, this, _1, _2, _3);
             connection_ = ensenso_ptr_->registerCallback(f);
           }
           else
           {
             boost::function<void(
               const boost::shared_ptr<PairOfImages>&,
-              const boost::shared_ptr<PairOfImages>&,
-              const boost::shared_ptr<pcl::PCLGenImage<float> >&)> f = boost::bind (&EnsensoDriver::imagesCallback, this, _1, _2, _3);
+              const boost::shared_ptr<PairOfImages>&)> f = boost::bind (&EnsensoDriver::imagesCallback, this, _1, _2);
             connection_ = ensenso_ptr_->registerCallback(f);
           }
         }

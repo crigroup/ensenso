@@ -47,8 +47,7 @@ public:
     (sig_cb_ensenso_point_cloud_rgb)(const pcl::PointCloud<pcl::PointXYZRGBA>::Ptr &);
 
     typedef void
-    (sig_cb_ensenso_images)(const boost::shared_ptr<PairOfImages> &,const boost::shared_ptr<PairOfImages> &,
-                            const boost::shared_ptr<pcl::PCLGenImage<float> > &);
+    (sig_cb_ensenso_images)(const boost::shared_ptr<PairOfImages> &,const boost::shared_ptr<PairOfImages> &);
 
     typedef void
     (sig_cb_ensenso_point_cloud_images)(const pcl::PointCloud<pcl::PointXYZ>::Ptr &,
@@ -56,7 +55,7 @@ public:
                                         const boost::shared_ptr<pcl::PCLGenImage<float> > &);
     typedef void
     (sig_cb_ensenso_images_rgb)(const boost::shared_ptr<PairOfImages> &,const boost::shared_ptr<PairOfImages> &,
-                                const boost::shared_ptr<PairOfImages> &, const boost::shared_ptr<pcl::PCLGenImage<float> > &);
+                                const boost::shared_ptr<PairOfImages> &);
     typedef void
     (sig_cb_ensenso_point_cloud_images_rgb)(const pcl::PointCloud<pcl::PointXYZRGBA>::Ptr &,
                                             const boost::shared_ptr<PairOfImages> &,const boost::shared_ptr<PairOfImages> &,
