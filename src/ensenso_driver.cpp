@@ -46,6 +46,7 @@ class EnsensoDriver
     ros::ServiceServer                calibrate_srv_;
     dynamic_reconfigure::Server<ensenso::CameraParametersConfig> reconfigure_server_;
     // Images
+    image_transport::ImageTransport   it_;
     image_transport::CameraPublisher  rgb_raw_pub_;
     image_transport::CameraPublisher  l_raw_pub_;
     image_transport::CameraPublisher  r_raw_pub_;
@@ -59,9 +60,10 @@ class EnsensoDriver
     ros::Publisher                    pattern_pose_pub_;
     ros::Publisher                    pattern_raw_pub_;
     // Streaming configuration
-    bool                              use_rgb_;
+    bool                              rgb_available_;
     bool                              is_streaming_cloud_;
     bool                              is_streaming_images_;
+    bool                              is_streaming_rgb_;
     bool                              stream_calib_pattern_;
     int                               trigger_mode_;
     // TF
@@ -76,9 +78,11 @@ class EnsensoDriver
      EnsensoDriver():
       is_streaming_images_(false),
       is_streaming_cloud_(false),
+      is_streaming_rgb_(false),
       trigger_mode_(-1),
-      use_rgb_(false),
-      nh_private_("~")
+      rgb_available_(false),
+      nh_private_("~"),
+      it_(nh_)
     {
       // Read parameters
       std::string serial, monoserial;
@@ -97,21 +101,12 @@ class EnsensoDriver
       nh_private_.param("stream_calib_pattern", stream_calib_pattern_, false);
       if (!nh_private_.hasParam("stream_calib_pattern"))
         ROS_WARN_STREAM("Parameter [~stream_calib_pattern] not found, using default: " << (stream_calib_pattern_ ? "TRUE":"FALSE"));
-      nh_private_.param("RGB", use_rgb_, false);
-      if (!nh_private_.hasParam("RGB"))
-        ROS_WARN_STREAM("Parameter [~RGB] not found, using default: " << (use_rgb_ ? "TRUE":"FALSE"));
       // Advertise topics
-      image_transport::ImageTransport it(nh_);
-      if (use_rgb_)
-      {
-        rgb_raw_pub_ = it.advertiseCamera("rgb/image_raw", 1);
-        rgb_rectified_pub_ = it.advertise("rgb/image_rect", 1);
-      }
-      l_raw_pub_ = it.advertiseCamera("left/image_raw", 1);
-      r_raw_pub_ = it.advertiseCamera("right/image_raw", 1);
-      depth_pub_ = it.advertiseCamera("depth/image_rect", 1);
-      l_rectified_pub_ = it.advertise("left/image_rect", 1);
-      r_rectified_pub_ = it.advertise("right/image_rect", 1);
+      l_raw_pub_ = it_.advertiseCamera("left/image_raw", 1);
+      r_raw_pub_ = it_.advertiseCamera("right/image_raw", 1);
+      depth_pub_ = it_.advertiseCamera("depth/image_rect", 1);
+      l_rectified_pub_ = it_.advertise("left/image_rect", 1);
+      r_rectified_pub_ = it_.advertise("right/image_rect", 1);
       cloud_pub_ = nh_.advertise<sensor_msgs::PointCloud2 >("depth/points", 1, false);
 
       pattern_raw_pub_ = nh_.advertise<ensenso::RawStereoPattern> ("pattern/stereo", 1, false);
@@ -120,9 +115,18 @@ class EnsensoDriver
       // Initialize Ensenso
       ensenso_ptr_.reset(new pcl::EnsensoGrabber);
       ensenso_ptr_->openDevice(serial);
-      if (use_rgb_)
+      try
       {
-        ensenso_ptr_->openMonoDevice(monoserial);
+        if (ensenso_ptr_->openMonoDevice(monoserial))
+        {
+          rgb_available_ = true;
+          ROS_INFO("Found RGB camera");
+        }
+      }
+      catch (pcl::IOException e)
+      {
+        rgb_available_ = false;
+        ROS_INFO("No RGB camera found");
       }
       ensenso_ptr_->openTcpPort();
       ensenso_ptr_->storeCalibrationPattern(stream_calib_pattern_);
@@ -272,7 +276,24 @@ class EnsensoDriver
         ROS_DEBUG_STREAM("CUDA is not supported. Upgrade EnsensoSDK to Version >= 2.1.7 in order to use CUDA.");
       #endif
       ROS_DEBUG("---");
-      ensenso_ptr_->setUseRGB(config.RGB);
+      if (rgb_available_)
+      {
+        if (!is_streaming_rgb_ && config.RGB)
+        {
+          rgb_raw_pub_ = it_.advertiseCamera("rgb/image_raw", 1);
+          rgb_rectified_pub_ = it_.advertise("rgb/image_rect_color", 1);
+        }
+        else
+        {
+          rgb_raw_pub_.shutdown();
+          rgb_rectified_pub_.shutdown();
+        }
+        ensenso_ptr_->setUseRGB(config.RGB);
+      }
+      else
+      {
+        ROS_ERROR("No RGB camera found, cannot stream RGB data.");
+      }
       // Capture parameters
       ensenso_ptr_->setAutoBlackLevel(config.AutoBlackLevel);
       ensenso_ptr_->setAutoExposure(config.AutoExposure);
@@ -286,9 +307,9 @@ class EnsensoDriver
       ensenso_ptr_->setHdr(config.Hdr);
       ensenso_ptr_->setPixelClock(config.PixelClock);
       ensenso_ptr_->setProjector(config.Projector);
+      ensenso_ptr_->setRGBTriggerDelay(config.RGBTriggerDelay);
       ensenso_ptr_->setTargetBrightness(config.TargetBrightness);
       ensenso_ptr_->setTriggerMode(trigger_mode);
-      ensenso_ptr_->setRGBTriggerDelay(config.RGBTriggerDelay);
       ensenso_ptr_->setUseDisparityMapAreaOfInterest(config.DisparityMapAOI);
       // Flexview and binning only work in 'Software' trigger mode and with the projector on
       if (trigger_mode.compare("Software") == 0 && config.Projector)
@@ -320,8 +341,8 @@ class EnsensoDriver
       #ifdef CUDA_IMPLEMENTED
         ensenso_ptr_->setEnableCUDA(config.EnableCUDA);
       #endif
-      // Streaming parameters
-      configureStreaming(config.Cloud, config.Images, config.TriggerMode);
+      // Streaming parameters - only request rgb when available
+      configureStreaming(config.Cloud, config.Images, (rgb_available_ && config.RGB), config.TriggerMode);
     }
 
     bool collectPatternCB(ensenso::CollectPattern::Request& req, ensenso::CollectPattern::Response &res)
@@ -365,13 +386,14 @@ class EnsensoDriver
       return true;
     }
 
-    bool configureStreaming(const bool cloud, const bool images, const int trigger_mode)
+    bool configureStreaming(const bool cloud, const bool images, const bool rgb, const int trigger_mode)
     {
       bool was_running = ensenso_ptr_->isRunning();
-      if ((is_streaming_cloud_ != cloud) || (is_streaming_images_ != images))
+      if ((is_streaming_cloud_ != cloud) || (is_streaming_images_ != images) || (is_streaming_rgb_ != rgb))
       {
         is_streaming_cloud_ = cloud;
         is_streaming_images_ = images;
+        is_streaming_rgb_ = rgb;
         if (was_running)
           ensenso_ptr_->stop();
         // Disconnect previous connection
@@ -379,7 +401,7 @@ class EnsensoDriver
         // Connect new signals
         if (cloud && images)
         {
-          if (use_rgb_)
+          if (rgb)
           {
             boost::function<void(
               const boost::shared_ptr<PointCloudXYZRGBA>&,
@@ -401,7 +423,7 @@ class EnsensoDriver
         }
         else if (images)
         {
-          if(use_rgb_)
+          if(rgb)
           {
             boost::function<void(
               const boost::shared_ptr<PairOfImages>&,
@@ -419,7 +441,7 @@ class EnsensoDriver
         }
         else if (cloud)
         {
-          if(use_rgb_)
+          if(rgb)
             {
             boost::function<void(
               const boost::shared_ptr<PointCloudXYZRGBA>&)> f = boost::bind (&EnsensoDriver::cloudRGBCallback, this, _1);
