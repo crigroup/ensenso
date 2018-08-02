@@ -116,6 +116,7 @@ class EnsensoDriver
 
       pattern_raw_pub_ = nh_.advertise<ensenso::RawStereoPattern> ("pattern/stereo", 1, false);
       pattern_pose_pub_ = nh_.advertise<geometry_msgs::PoseStamped> ("pattern/pose", 1, false);
+
       // Initialize Ensenso
       ensenso_ptr_.reset(new pcl::EnsensoGrabber);
       ensenso_ptr_->openDevice(serial);
@@ -127,7 +128,7 @@ class EnsensoDriver
       ensenso_ptr_->storeCalibrationPattern(stream_calib_pattern_);
       // Start dynamic reconfigure server
       dynamic_reconfigure::Server<ensenso::CameraParametersConfig>::CallbackType f;
-      f = boost::bind(&EnsensoDriver::CameraParametersCallback, this, _1, _2);
+      f = boost::bind(&EnsensoDriver::cameraParametersCallback, this, _1, _2);
       reconfigure_server_.setCallback(f);
       // Start the camera.
       ensenso_ptr_->start();
@@ -185,7 +186,7 @@ class EnsensoDriver
       return true;
     }
 
-    void CameraParametersCallback(ensenso::CameraParametersConfig &config, uint32_t level)
+    void cameraParametersCallback(ensenso::CameraParametersConfig &config, uint32_t level)
     {
       // Process enumerators
       std::string trigger_mode, profile;
