@@ -630,6 +630,8 @@ bool pcl::EnsensoGrabber::openDevice (std::string serial)
     camera_ = (*root_)[itmCameras][itmBySerialNo][serial];
     if (!camera_.exists () || camera_[itmType] != valStereo)
       PCL_THROW_EXCEPTION (pcl::IOException, "Please connect a single stereo camera to your computer!");
+    if (!(*root_)[itmCameras][itmBySerialNo][serial][itmStatus][itmAvailable].asBool())
+      PCL_THROW_EXCEPTION (pcl::IOException, "The device cannot be opened.");
     NxLibCommand open (cmdOpen);
     open.parameters ()[itmCameras] = camera_[itmSerialNumber].asString ();
     open.execute ();
@@ -654,6 +656,8 @@ bool pcl::EnsensoGrabber::openMonoDevice (std::string serial)
     monocam_ = (*root_)[itmCameras][itmBySerialNo][serial];
     if (!monocam_.exists () || monocam_[itmType] != valMonocular)
       PCL_THROW_EXCEPTION (pcl::IOException, "Please connect a single mono camera to your computer!");
+    if (!(*root_)[itmCameras][itmBySerialNo][serial][itmStatus][itmAvailable].asBool())
+      PCL_THROW_EXCEPTION (pcl::IOException, "The device cannot be opened.");
     NxLibCommand open (cmdOpen);
     open.parameters ()[itmCameras] = monocam_[itmSerialNumber].asString ();
     open.execute ();
