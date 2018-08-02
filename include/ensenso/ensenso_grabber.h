@@ -10,6 +10,7 @@
 #include <pcl/io/grabber.h>
 #include <pcl/common/synchronizer.h>
 // Others
+#include <Eigen/Geometry>
 #include <boost/thread.hpp>
 #include <sensor_msgs/CameraInfo.h>
 #include <geometry_msgs/TransformStamped.h>
@@ -23,6 +24,11 @@ struct PCLGenImage : PCLImage
     std::vector<T> data;
     typedef boost::shared_ptr< ::pcl::PCLGenImage<T> > Ptr;
     typedef boost::shared_ptr< ::pcl::PCLGenImage<T>  const> ConstPtr;
+};
+
+struct Transform
+{
+    double tx, ty, tz, qx, qy, qz, qw;
 };
 /**
  * @brief Grabber for IDS-Imaging Ensenso's devices
@@ -47,19 +53,14 @@ public:
     (sig_cb_ensenso_point_cloud_rgb)(const pcl::PointCloud<pcl::PointXYZRGBA>::Ptr &);
 
     typedef void
-    (sig_cb_ensenso_images)(const boost::shared_ptr<PairOfImages> &,const boost::shared_ptr<PairOfImages> &);
+    (sig_cb_ensenso_images)(const boost::shared_ptr<PairOfImages>&, const boost::shared_ptr<PairOfImages>&);
 
     typedef void
-    (sig_cb_ensenso_point_cloud_images)(const pcl::PointCloud<pcl::PointXYZ>::Ptr &,
-                                        const boost::shared_ptr<PairOfImages> &,const boost::shared_ptr<PairOfImages> &,
-                                        const boost::shared_ptr<pcl::PCLGenImage<float> > &);
+    (sig_cb_ensenso_images_rgb)(const boost::shared_ptr<PairOfImages>&, const boost::shared_ptr<PairOfImages>&, const boost::shared_ptr<PairOfImages>&);
+
     typedef void
-    (sig_cb_ensenso_images_rgb)(const boost::shared_ptr<PairOfImages> &,const boost::shared_ptr<PairOfImages> &,
-                                const boost::shared_ptr<PairOfImages> &);
-    typedef void
-    (sig_cb_ensenso_point_cloud_images_rgb)(const pcl::PointCloud<pcl::PointXYZRGBA>::Ptr &,
-                                            const boost::shared_ptr<PairOfImages> &,const boost::shared_ptr<PairOfImages> &,
-                                            const boost::shared_ptr<PairOfImages> &, const boost::shared_ptr<pcl::PCLGenImage<float> > &);
+    (sig_cb_ensenso_image_depth)(const boost::shared_ptr<pcl::PCLGenImage<float> >&);
+
     /** @endcond */
     
     /** @brief Constructor */
@@ -96,14 +97,10 @@ public:
                             int &iterations,
                             double &reprojection_error) const;
     
-    /** @brief Closes the Ensenso device
+    /** @brief Closes all Ensenso devices
      * @return True if successful, false otherwise */
-    bool closeDevice ();
+    bool closeDevices ();
 
-    /** @brief Closes the Ensenso device
-     * @return True if successful, false otherwise */
-    bool closeMonoDevice ();
-    
     /** @brief Close TCP port program
      * @return True if successful, false otherwise
      * @warning If you do not close the TCP port the program might exit with the port still open, if it is the case
@@ -156,7 +153,7 @@ public:
 
      * @return True if successful, false otherwise
      */
-    bool getTFtoRGB(geometry_msgs::TransformStamped& tf) const;
+    bool getTFLeftToRGB(Transform& tf) const;
     
     /** @brief Get the raw stereo pattern information and the pattern pose. Before using it enable the
      * storeCalibrationPattern.
@@ -536,16 +533,13 @@ protected:
     /** @brief Boost images signal */
     boost::signals2::signal<sig_cb_ensenso_images>* images_signal_;
 
-    /** @brief Boost images + point cloud signal */
-    boost::signals2::signal<sig_cb_ensenso_point_cloud_images>* point_cloud_images_signal_;
+    /** @brief Boost images rgb signal */
+    boost::signals2::signal<sig_cb_ensenso_images_rgb>* images_rgb_signal_;
 
-    /** @brief Boost images signal with RGB */
-    boost::signals2::signal<sig_cb_ensenso_images_rgb>* images_signal_rgb_;
+    /** @brief Boost depth image signal */
+    boost::signals2::signal<sig_cb_ensenso_image_depth>* image_depth_signal_;
 
-    /** @brief Boost images + point cloud signal with RGB */
-    boost::signals2::signal<sig_cb_ensenso_point_cloud_images_rgb>* point_cloud_images_signal_rgb_;
-
-    /** @brief Reference to the camera tree */
+    /** @brief References to the camera tree */
     NxLibItem camera_;
 
     NxLibItem monocam_;
@@ -597,7 +591,7 @@ protected:
     double timestamp_;
 
     /** @brief translation from left camera to RGB frame */
-    pcl::PointXYZ translation_to_rgb_;
+    Transform tf_left_to_rgb_;
 
     /** @brief Mutual exclusion for FPS computation */
     mutable boost::mutex fps_mutex_;

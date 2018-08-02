@@ -26,7 +26,8 @@
 #include <ensenso/CalibrateHandEye.h>
 #include <ensenso/CollectPattern.h>
 #include <ensenso/EstimatePatternPose.h>
-
+// boost
+#include <boost/thread/thread.hpp>
 
 // Typedefs
 typedef std::pair<pcl::PCLGenImage<pcl::uint8_t>, pcl::PCLGenImage<pcl::uint8_t> > PairOfImages;
@@ -62,25 +63,31 @@ class EnsensoDriver
     // Streaming configuration
     bool                              rgb_available_;
     bool                              is_streaming_cloud_;
+    bool                              is_streaming_depth_;
     bool                              is_streaming_images_;
-    bool                              is_streaming_rgb_;
+    bool                              find_pattern_;
     bool                              stream_calib_pattern_;
     int                               trigger_mode_;
     // TF
     std::string                       camera_frame_id_;
     std::string                       rgb_camera_frame_id_;
     tf2_ros::TransformBroadcaster     tf_br_;
+    ros::Timer                        tf_publisher_;
     // Ensenso grabber
-    boost::signals2::connection       connection_;
+    boost::signals2::connection       cloud_connection_;
+    boost::signals2::connection       image_connection_;
+    boost::signals2::connection       depth_connection_;
     pcl::EnsensoGrabber::Ptr          ensenso_ptr_;
 
   public:
      EnsensoDriver():
+      rgb_available_(false),
       is_streaming_images_(false),
       is_streaming_cloud_(false),
-      is_streaming_rgb_(false),
+      is_streaming_depth_(false),
+      stream_calib_pattern_(false),
+      find_pattern_(true),
       trigger_mode_(-1),
-      rgb_available_(false),
       nh_private_("~"),
       it_(nh_)
     {
@@ -102,15 +109,21 @@ class EnsensoDriver
       if (!nh_private_.hasParam("stream_calib_pattern"))
         ROS_WARN_STREAM("Parameter [~stream_calib_pattern] not found, using default: " << (stream_calib_pattern_ ? "TRUE":"FALSE"));
       // Advertise topics
-      l_raw_pub_ = it_.advertiseCamera("left/image_raw", 1);
-      r_raw_pub_ = it_.advertiseCamera("right/image_raw", 1);
-      depth_pub_ = it_.advertiseCamera("depth/image_rect", 1);
-      l_rectified_pub_ = it_.advertise("left/image_rect", 1);
-      r_rectified_pub_ = it_.advertise("right/image_rect", 1);
-      cloud_pub_ = nh_.advertise<sensor_msgs::PointCloud2 >("depth/points", 1, false);
+      ros::SubscriberStatusCallback cloud_rssc = boost::bind(&EnsensoDriver::cloudSubscribeCallback, this);
+      image_transport::SubscriberStatusCallback image_issc = boost::bind(&EnsensoDriver::imagesSubscribeCallback, this);
+      ros::SubscriberStatusCallback image_rssc = boost::bind(&EnsensoDriver::imagesSubscribeCallback, this);
+      image_transport::SubscriberStatusCallback depth_issc = boost::bind(&EnsensoDriver::depthSubscribeCallback, this);
+      ros::SubscriberStatusCallback depth_rssc = boost::bind(&EnsensoDriver::depthSubscribeCallback, this);
 
-      pattern_raw_pub_ = nh_.advertise<ensenso::RawStereoPattern> ("pattern/stereo", 1, false);
-      pattern_pose_pub_ = nh_.advertise<geometry_msgs::PoseStamped> ("pattern/pose", 1, false);
+      l_raw_pub_ = it_.advertiseCamera("left/image_raw", 1, image_issc, image_issc, image_rssc, image_rssc);
+      r_raw_pub_ = it_.advertiseCamera("right/image_raw", 1, image_issc, image_issc, image_rssc, image_rssc);
+
+      l_rectified_pub_ = it_.advertise("left/image_rect", 1, image_issc, image_issc);
+      r_rectified_pub_ = it_.advertise("right/image_rect", 1, image_issc, image_issc);
+
+      depth_pub_ = it_.advertiseCamera("depth/image_rect", 1, depth_issc, depth_issc, depth_rssc, depth_rssc);
+
+      cloud_pub_ = nh_.advertise<sensor_msgs::PointCloud2 >("depth/points", 1, cloud_rssc, cloud_rssc);
 
       // Initialize Ensenso
       ensenso_ptr_.reset(new pcl::EnsensoGrabber);
@@ -121,6 +134,12 @@ class EnsensoDriver
         {
           rgb_available_ = true;
           ROS_INFO("Found RGB camera");
+          image_transport::SubscriberStatusCallback image_issc = boost::bind(&EnsensoDriver::imagesSubscribeCallback, this);
+          ros::SubscriberStatusCallback image_rssc = boost::bind(&EnsensoDriver::imagesSubscribeCallback, this);
+          rgb_raw_pub_ = it_.advertiseCamera("rgb/image_raw", 1, image_issc, image_issc, image_rssc, image_rssc);
+          rgb_rectified_pub_ = it_.advertise("rgb/image_rect_color", 1, image_issc, image_issc);
+          tf_publisher_ = nh_.createTimer(ros::Duration(0.1), boost::bind(&EnsensoDriver::publishTF, this));
+          ensenso_ptr_->setUseRGB(true);
         }
       }
       catch (pcl::IOException e)
@@ -128,6 +147,7 @@ class EnsensoDriver
         rgb_available_ = false;
         ROS_INFO("No RGB camera found");
       }
+
       ensenso_ptr_->openTcpPort();
       ensenso_ptr_->storeCalibrationPattern(stream_calib_pattern_);
       // Start dynamic reconfigure server
@@ -137,18 +157,16 @@ class EnsensoDriver
       // Start the camera.
       ensenso_ptr_->start();
       // Advertise services
-      calibrate_srv_ = nh_.advertiseService("calibrate_handeye", &EnsensoDriver::calibrateHandEyeCB, this);
-      pattern_srv_ = nh_.advertiseService("estimate_pattern_pose", &EnsensoDriver::estimatePatternPoseCB, this);
-      collect_srv_ = nh_.advertiseService("collect_pattern", &EnsensoDriver::collectPatternCB, this);
       ROS_INFO("Finished [ensenso_driver] initialization");
     }
 
     ~EnsensoDriver()
     {
-      connection_.disconnect();
+      cloud_connection_.disconnect();
+      image_connection_.disconnect();
+      depth_connection_.disconnect();
+      ensenso_ptr_->closeDevices();
       ensenso_ptr_->closeTcpPort();
-      ensenso_ptr_->closeDevice();
-      ensenso_ptr_->closeMonoDevice();
     }
 
     bool calibrateHandEyeCB(ensenso::CalibrateHandEye::Request& req, ensenso::CalibrateHandEye::Response &res)
@@ -265,10 +283,6 @@ class EnsensoDriver
       ROS_DEBUG_STREAM("SurfaceConnectivity: "   << std::boolalpha << config.SurfaceConnectivity);
       ROS_DEBUG_STREAM("NearPlane: "   << std::boolalpha << config.NearPlane);
       ROS_DEBUG_STREAM("FarPlane: "   << std::boolalpha << config.FarPlane);
-      ROS_DEBUG("Stream Parameters");
-      ROS_DEBUG_STREAM("Cloud: "   << std::boolalpha << config.Cloud);
-      ROS_DEBUG_STREAM("Images: "   << std::boolalpha << config.Images);
-      ROS_DEBUG_STREAM("Use RGB: "   << std::boolalpha << config.RGB);
       ROS_DEBUG("CUDA Parameters");
       #ifdef CUDA_IMPLEMENTED
         ROS_DEBUG_STREAM("Use CUDA: "   << std::boolalpha << config.EnableCUDA);
@@ -276,24 +290,17 @@ class EnsensoDriver
         ROS_DEBUG_STREAM("CUDA is not supported. Upgrade EnsensoSDK to Version >= 2.1.7 in order to use CUDA.");
       #endif
       ROS_DEBUG("---");
-      if (rgb_available_)
+      //advertise topics only when parameters are set accordingly
+
+      if (config.FindPattern && !find_pattern_)
       {
-        if (!is_streaming_rgb_ && config.RGB)
-        {
-          rgb_raw_pub_ = it_.advertiseCamera("rgb/image_raw", 1);
-          rgb_rectified_pub_ = it_.advertise("rgb/image_rect_color", 1);
-        }
-        else
-        {
-          rgb_raw_pub_.shutdown();
-          rgb_rectified_pub_.shutdown();
-        }
-        ensenso_ptr_->setUseRGB(config.RGB);
+        pattern_raw_pub_ = nh_.advertise<ensenso::RawStereoPattern> ("pattern/stereo", 1, false);
+        pattern_pose_pub_ = nh_.advertise<geometry_msgs::PoseStamped> ("pattern/pose", 1, false);
+        calibrate_srv_ = nh_.advertiseService("calibrate_handeye", &EnsensoDriver::calibrateHandEyeCB, this);
+        pattern_srv_ = nh_.advertiseService("estimate_pattern_pose", &EnsensoDriver::estimatePatternPoseCB, this);
+        collect_srv_ = nh_.advertiseService("collect_pattern", &EnsensoDriver::collectPatternCB, this);
       }
-      else
-      {
-        ROS_ERROR("No RGB camera found, cannot stream RGB data.");
-      }
+      find_pattern_ = config.FindPattern;
       // Capture parameters
       ensenso_ptr_->setAutoBlackLevel(config.AutoBlackLevel);
       ensenso_ptr_->setAutoExposure(config.AutoExposure);
@@ -342,7 +349,19 @@ class EnsensoDriver
         ensenso_ptr_->setEnableCUDA(config.EnableCUDA);
       #endif
       // Streaming parameters - only request rgb when available
-      configureStreaming(config.Cloud, config.Images, (rgb_available_ && config.RGB), config.TriggerMode);
+      if (trigger_mode_ != config.TriggerMode)
+      {
+        trigger_mode_ = config.TriggerMode;
+        if (ensenso_ptr_->isRunning())
+        {
+          ensenso_ptr_->stop();
+          ensenso_ptr_->start();
+        }
+      }
+      //check if someone is subscribed and start!
+      depthSubscribeCallback();
+      imagesSubscribeCallback();
+      cloudSubscribeCallback();
     }
 
     bool collectPatternCB(ensenso::CollectPattern::Request& req, ensenso::CollectPattern::Response &res)
@@ -383,89 +402,6 @@ class EnsensoDriver
       res.success = (res.pattern_count == prev_pattern_count+1);
       if (was_running)
         ensenso_ptr_->start();
-      return true;
-    }
-
-    bool configureStreaming(const bool cloud, const bool images, const bool rgb, const int trigger_mode)
-    {
-      bool was_running = ensenso_ptr_->isRunning();
-      if ((is_streaming_cloud_ != cloud) || (is_streaming_images_ != images) || (is_streaming_rgb_ != rgb))
-      {
-        is_streaming_cloud_ = cloud;
-        is_streaming_images_ = images;
-        is_streaming_rgb_ = rgb;
-        if (was_running)
-          ensenso_ptr_->stop();
-        // Disconnect previous connection
-        connection_.disconnect();
-        // Connect new signals
-        if (cloud && images)
-        {
-          if (rgb)
-          {
-            boost::function<void(
-              const boost::shared_ptr<PointCloudXYZRGBA>&,
-              const boost::shared_ptr<PairOfImages>&,
-              const boost::shared_ptr<PairOfImages>&,
-              const boost::shared_ptr<PairOfImages>&,
-              const boost::shared_ptr<pcl::PCLGenImage<float> >&)> f = boost::bind (&EnsensoDriver::cloudImagesRGBCallback, this, _1, _2, _3, _4, _5);
-            connection_ = ensenso_ptr_->registerCallback(f);
-          }
-          else
-          {
-            boost::function<void(
-              const boost::shared_ptr<PointCloudXYZ>&,
-              const boost::shared_ptr<PairOfImages>&,
-              const boost::shared_ptr<PairOfImages>&,
-              const boost::shared_ptr<pcl::PCLGenImage<float> >&)> f = boost::bind (&EnsensoDriver::cloudImagesCallback, this, _1, _2, _3, _4);
-            connection_ = ensenso_ptr_->registerCallback(f);
-          }
-        }
-        else if (images)
-        {
-          if(rgb)
-          {
-            boost::function<void(
-              const boost::shared_ptr<PairOfImages>&,
-              const boost::shared_ptr<PairOfImages>&,
-              const boost::shared_ptr<PairOfImages>&)> f = boost::bind (&EnsensoDriver::imagesRGBCallback, this, _1, _2, _3);
-            connection_ = ensenso_ptr_->registerCallback(f);
-          }
-          else
-          {
-            boost::function<void(
-              const boost::shared_ptr<PairOfImages>&,
-              const boost::shared_ptr<PairOfImages>&)> f = boost::bind (&EnsensoDriver::imagesCallback, this, _1, _2);
-            connection_ = ensenso_ptr_->registerCallback(f);
-          }
-        }
-        else if (cloud)
-        {
-          if(rgb)
-            {
-            boost::function<void(
-              const boost::shared_ptr<PointCloudXYZRGBA>&)> f = boost::bind (&EnsensoDriver::cloudRGBCallback, this, _1);
-            connection_ = ensenso_ptr_->registerCallback(f);
-          }
-          else
-          {
-            boost::function<void(
-              const boost::shared_ptr<PointCloudXYZ>&)> f = boost::bind (&EnsensoDriver::cloudCallback, this, _1);
-            connection_ = ensenso_ptr_->registerCallback(f);
-          }
-        }
-        if (was_running)
-          ensenso_ptr_->start();
-      }
-      else if (trigger_mode_ != trigger_mode)
-      {
-        trigger_mode_ = trigger_mode;
-        if (was_running)
-        {
-          ensenso_ptr_->stop();
-          ensenso_ptr_->start();
-        }
-      }
       return true;
     }
 
@@ -510,7 +446,6 @@ class EnsensoDriver
         ros::Time stamp;
         //stamp is the same for all images/cloud
         pcl_conversions::fromPCL(cloud->header.stamp, stamp);
-        publishTF(stamp);
         cloud->header.frame_id = rgb_camera_frame_id_;
         sensor_msgs::PointCloud2 cloud_msg;
         cloud_msg.header.stamp = stamp;
@@ -562,9 +497,6 @@ class EnsensoDriver
       rinfo.header.frame_id = camera_frame_id_;
       rgbinfo.header.stamp = stamp;
       rgbinfo.header.frame_id = rgb_camera_frame_id_;
-
-      //TF
-      publishTF(stamp);
       // Images
       if (l_raw_pub_.getNumSubscribers() > 0)
         l_raw_pub_.publish(*toImageMsg(rawimages->first, stamp, camera_frame_id_), linfo, stamp);
@@ -582,106 +514,41 @@ class EnsensoDriver
       publishCalibrationPattern(stamp);
     }
 
-    void cloudImagesCallback( const boost::shared_ptr<PointCloudXYZ>& cloud,
-                              const boost::shared_ptr<PairOfImages>& rawimages, const boost::shared_ptr<PairOfImages>& rectifiedimages,
-                              const boost::shared_ptr<pcl::PCLGenImage<float> >& depthimage)
+    void depthCallback( const boost::shared_ptr<pcl::PCLGenImage<float> >& depthimage)
     {
-      ros::Time stamp;
-      //stamp is the same for all images/cloud
-      pcl_conversions::fromPCL(depthimage->header.stamp, stamp);
-      // Get cameras info
-      sensor_msgs::CameraInfo linfo, rinfo, dinfo;
-      ensenso_ptr_->getCameraInfo("Left", linfo);
-      ensenso_ptr_->getCameraInfo("Right", rinfo);
-      ensenso_ptr_->getCameraInfo("Depth", dinfo);
-      linfo.header.stamp = stamp;
-      linfo.header.frame_id = camera_frame_id_;
-      rinfo.header.stamp = stamp;
-      rinfo.header.frame_id = camera_frame_id_;
-      dinfo.header.stamp = stamp;
-      dinfo.header.frame_id = camera_frame_id_;
-      // Images
-      if (l_raw_pub_.getNumSubscribers() > 0)
-        l_raw_pub_.publish(*toImageMsg(rawimages->first, stamp, camera_frame_id_), linfo, stamp);
-      if (r_raw_pub_.getNumSubscribers() > 0)
-        r_raw_pub_.publish(*toImageMsg(rawimages->second, stamp, camera_frame_id_), rinfo, stamp);
-      if (l_rectified_pub_.getNumSubscribers() > 0)
-        l_rectified_pub_.publish(toImageMsg(rectifiedimages->first, stamp, camera_frame_id_));
-      if (r_rectified_pub_.getNumSubscribers() > 0)
-        r_rectified_pub_.publish(toImageMsg(rectifiedimages->second, stamp, camera_frame_id_));
       if (depth_pub_.getNumSubscribers() > 0)
-        depth_pub_.publish(*toImageMsg(*depthimage, stamp, camera_frame_id_), dinfo, stamp);
-      // Publish calibration pattern info (if any)
-      publishCalibrationPattern(stamp);
-      // Point cloud
-      if (cloud_pub_.getNumSubscribers() > 0)
       {
-        cloud->header.frame_id = camera_frame_id_;
-        sensor_msgs::PointCloud2 cloud_msg;
-        pcl::toROSMsg(*cloud, cloud_msg);
-        cloud_msg.header.stamp = stamp;
-        cloud_pub_.publish(cloud_msg);
+        std::string frame_id = rgb_available_ ? rgb_camera_frame_id_ : camera_frame_id_;
+
+        ros::Time stamp;
+        //stamp is the same for all images/cloud
+        pcl_conversions::fromPCL(depthimage->header.stamp, stamp);
+        sensor_msgs::CameraInfo dinfo;
+        ensenso_ptr_->getCameraInfo("Depth", dinfo);
+        dinfo.header.stamp = stamp;
+        dinfo.header.frame_id = frame_id;
+        depth_pub_.publish(*toImageMsg(*depthimage, stamp, frame_id), dinfo, stamp);
       }
     }
 
-    void cloudImagesRGBCallback( const boost::shared_ptr<PointCloudXYZRGBA>& cloud,
-                                 const boost::shared_ptr<PairOfImages>& rawimages, const boost::shared_ptr<PairOfImages>& rectifiedimages,
-                                 const boost::shared_ptr<PairOfImages>& rgbimages, const boost::shared_ptr<pcl::PCLGenImage<float> >& depthimage)
+    void publishTF()
     {
-      ros::Time stamp;
-      //stamp is the same for all images/cloud
-      pcl_conversions::fromPCL(depthimage->header.stamp, stamp);
-      // Get cameras info
-      sensor_msgs::CameraInfo linfo, rinfo, rgbinfo, dinfo;
-      ensenso_ptr_->getCameraInfo("Left", linfo);
-      ensenso_ptr_->getCameraInfo("Right", rinfo);
-      ensenso_ptr_->getCameraInfo("RGB", rgbinfo);
-      ensenso_ptr_->getCameraInfo("Depth", dinfo);
-      linfo.header.stamp = stamp;
-      linfo.header.frame_id = camera_frame_id_;
-      rinfo.header.stamp = stamp;
-      rinfo.header.frame_id = camera_frame_id_;
-      rgbinfo.header.stamp = stamp;
-      rgbinfo.header.frame_id = rgb_camera_frame_id_;
-      dinfo.header.stamp = stamp;
-      dinfo.header.frame_id = rgb_camera_frame_id_;
-      //TF
-      publishTF(stamp);
-      // Images
-      if (l_raw_pub_.getNumSubscribers() > 0)
-        l_raw_pub_.publish(*toImageMsg(rawimages->first, stamp, camera_frame_id_), linfo, stamp);
-      if (r_raw_pub_.getNumSubscribers() > 0)
-        r_raw_pub_.publish(*toImageMsg(rawimages->second, stamp, camera_frame_id_), rinfo, stamp);
-      if (l_rectified_pub_.getNumSubscribers() > 0)
-        l_rectified_pub_.publish(toImageMsg(rectifiedimages->first, stamp, camera_frame_id_));
-      if (r_rectified_pub_.getNumSubscribers() > 0)
-        r_rectified_pub_.publish(toImageMsg(rectifiedimages->second, stamp, camera_frame_id_));
-      if (rgb_raw_pub_.getNumSubscribers() > 0)
-        rgb_raw_pub_.publish(*toImageMsg(rgbimages->first, stamp, rgb_camera_frame_id_), rgbinfo, stamp);
-      if (rgb_rectified_pub_.getNumSubscribers() > 0)
-        rgb_rectified_pub_.publish(toImageMsg(rgbimages->second, stamp, rgb_camera_frame_id_));
-      if (depth_pub_.getNumSubscribers() > 0)
-        depth_pub_.publish(*toImageMsg(*depthimage, stamp, rgb_camera_frame_id_), dinfo, stamp);
-      // Publish calibration pattern info (if any)
-      publishCalibrationPattern(stamp);
-      // Point cloud
-      if (cloud_pub_.getNumSubscribers() > 0)
+      pcl::Transform ensenso_tf;
+      if (!ensenso_ptr_->getTFLeftToRGB(ensenso_tf))
       {
-        cloud->header.frame_id = rgb_camera_frame_id_;
-        sensor_msgs::PointCloud2 cloud_msg;
-        pcl::toROSMsg(*cloud, cloud_msg);
-        cloud_msg.header.stamp = stamp;
-        cloud_pub_.publish(cloud_msg);
+        return;
       }
-    }
-
-    void publishTF(const ros::Time &now)
-    {
       geometry_msgs::TransformStamped tf;
       tf.header.frame_id = camera_frame_id_;
-      tf.header.stamp = now;
+      tf.header.stamp = ros::Time::now();
       tf.child_frame_id = rgb_camera_frame_id_;
-      ensenso_ptr_->getTFtoRGB(tf);
+      tf.transform.rotation.x = ensenso_tf.qx;
+      tf.transform.rotation.y = ensenso_tf.qy;
+      tf.transform.rotation.z = ensenso_tf.qz;
+      tf.transform.rotation.w = ensenso_tf.qw;
+      tf.transform.translation.x = ensenso_tf.tx;
+      tf.transform.translation.y = ensenso_tf.ty;
+      tf.transform.translation.z = ensenso_tf.tz;
       tf_br_.sendTransform(tf);
     }
 
@@ -755,6 +622,105 @@ class EnsensoDriver
       }
       cv::Mat image_mat(pcl_image.height, pcl_image.width, type, image_array);
       return cv_bridge::CvImage(header, encoding, image_mat).toImageMsg();
+    }
+
+    void imagesSubscribeCallback ()
+    {
+      bool need_images = ((rgb_raw_pub_.getNumSubscribers() + rgb_raw_pub_.getNumSubscribers() + 
+                         rgb_rectified_pub_.getNumSubscribers() + l_raw_pub_.getNumSubscribers() + 
+                         r_raw_pub_.getNumSubscribers() + l_rectified_pub_.getNumSubscribers() + 
+                         r_rectified_pub_.getNumSubscribers()) > 0); 
+
+      if (need_images && !is_streaming_images_)
+      {
+        if (rgb_available_ && (rgb_raw_pub_.getNumSubscribers() + rgb_rectified_pub_.getNumSubscribers()) > 0)
+        {
+          boost::function<void(
+              const boost::shared_ptr<PairOfImages>&,
+              const boost::shared_ptr<PairOfImages>&,
+              const boost::shared_ptr<PairOfImages>&)> f = boost::bind (&EnsensoDriver::imagesRGBCallback, this, _1, _2, _3);
+            image_connection_ = ensenso_ptr_->registerCallback(f);
+        }
+        else
+        {
+          boost::function<void(
+              const boost::shared_ptr<PairOfImages>&,
+              const boost::shared_ptr<PairOfImages>&)> f = boost::bind (&EnsensoDriver::imagesCallback, this, _1, _2);
+            image_connection_ = ensenso_ptr_->registerCallback(f);
+        }
+        if (!ensenso_ptr_->isRunning())
+        {
+          ensenso_ptr_->start();
+        }
+        is_streaming_images_ = true;
+      }
+      else if (!need_images && is_streaming_images_)
+      {
+        image_connection_.disconnect();
+        is_streaming_images_ = false;
+        if (!is_streaming_cloud_ && !is_streaming_depth_)
+        {
+          ensenso_ptr_->stop();
+        }
+      }
+
+    }
+
+    void cloudSubscribeCallback ()
+    {
+      if ((cloud_pub_.getNumSubscribers() > 0) && !is_streaming_cloud_)
+      {
+        if(rgb_available_)
+        {
+          boost::function<void(
+            const boost::shared_ptr<PointCloudXYZRGBA>&)> f = boost::bind (&EnsensoDriver::cloudRGBCallback, this, _1);
+          cloud_connection_ = ensenso_ptr_->registerCallback(f);
+        }
+        else
+        {
+          boost::function<void(
+            const boost::shared_ptr<PointCloudXYZ>&)> f = boost::bind (&EnsensoDriver::cloudCallback, this, _1);
+          cloud_connection_ = ensenso_ptr_->registerCallback(f);
+        }
+        if (!ensenso_ptr_->isRunning())
+        {
+          ensenso_ptr_->start();
+        }
+        is_streaming_cloud_ = true;
+      }
+      else if ((cloud_pub_.getNumSubscribers() == 0) && is_streaming_cloud_)
+      {
+        cloud_connection_.disconnect();
+        is_streaming_cloud_ = false;
+        if (!is_streaming_depth_ && !is_streaming_images_)
+        {
+          ensenso_ptr_->stop();
+        }
+      }
+    }
+
+    void depthSubscribeCallback ()
+    {
+      if ((depth_pub_.getNumSubscribers() > 0) && !is_streaming_depth_)
+      {
+        boost::function<void(
+          const boost::shared_ptr<pcl::PCLGenImage<float> >&)> f = boost::bind (&EnsensoDriver::depthCallback, this, _1);
+        depth_connection_ = ensenso_ptr_->registerCallback(f);
+        is_streaming_depth_ = true;
+        if (!ensenso_ptr_->isRunning())
+        {
+          ensenso_ptr_->start();
+        }
+      }
+      else if ((depth_pub_.getNumSubscribers() == 0) && is_streaming_depth_)
+      {
+        depth_connection_.disconnect();
+        is_streaming_depth_ = false;
+        if (!is_streaming_cloud_ && !is_streaming_images_)
+        {
+          ensenso_ptr_->stop();
+        }
+      }
     }
 };
 
