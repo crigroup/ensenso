@@ -460,7 +460,7 @@ class EnsensoDriver
       //stamp is the same for all images
       pcl_conversions::fromPCL(rawimages->first.header.stamp, stamp);
       // Get cameras info
-      sensor_msgs::CameraInfo linfo, rinfo, dinfo;
+      sensor_msgs::CameraInfo linfo, rinfo;
       ensenso_ptr_->getCameraInfo("Left", linfo);
       ensenso_ptr_->getCameraInfo("Right", rinfo);
       linfo.header.stamp = stamp;
@@ -487,10 +487,10 @@ class EnsensoDriver
       //stamp is the same for all images/cloud
       pcl_conversions::fromPCL(rawimages->first.header.stamp, stamp);
       // Get cameras info
-      sensor_msgs::CameraInfo linfo, rinfo, rgbinfo, dinfo;
+      sensor_msgs::CameraInfo linfo, rinfo, rgbinfo;
       ensenso_ptr_->getCameraInfo("Left", linfo);
       ensenso_ptr_->getCameraInfo("Right", rinfo);
-      ensenso_ptr_->getCameraInfo("RGB", rinfo);
+      ensenso_ptr_->getCameraInfo("RGB", rgbinfo);
       linfo.header.stamp = stamp;
       linfo.header.frame_id = camera_frame_id_;
       rinfo.header.stamp = stamp;
