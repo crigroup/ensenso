@@ -62,6 +62,9 @@ class EnsensoDriver
     ros::Publisher                    pattern_raw_pub_;
     // Streaming configuration
     bool                              rgb_available_;
+    bool                              enable_cloud_;
+    bool                              enable_images_;
+    bool                              enable_depth_;
     bool                              is_streaming_cloud_;
     bool                              is_streaming_depth_;
     bool                              is_streaming_images_;
@@ -82,6 +85,9 @@ class EnsensoDriver
   public:
      EnsensoDriver():
       rgb_available_(false),
+      enable_cloud_(false),
+      enable_images_(false),
+      enable_depth_(false),
       is_streaming_images_(false),
       is_streaming_cloud_(false),
       is_streaming_depth_(false),
@@ -138,7 +144,7 @@ class EnsensoDriver
           ros::SubscriberStatusCallback image_rssc = boost::bind(&EnsensoDriver::imagesSubscribeCallback, this);
           rgb_raw_pub_ = it_.advertiseCamera("rgb/image_raw", 1, image_issc, image_issc, image_rssc, image_rssc);
           rgb_rectified_pub_ = it_.advertise("rgb/image_rect_color", 1, image_issc, image_issc);
-          tf_publisher_ = nh_.createTimer(ros::Duration(0.1), boost::bind(&EnsensoDriver::publishTF, this));
+          tf_publisher_ = nh_.createTimer(ros::Duration(0.5), boost::bind(&EnsensoDriver::publishTF, this));
           ensenso_ptr_->setUseRGB(true);
         }
       }
@@ -283,6 +289,10 @@ class EnsensoDriver
       ROS_DEBUG_STREAM("SurfaceConnectivity: "   << std::boolalpha << config.SurfaceConnectivity);
       ROS_DEBUG_STREAM("NearPlane: "   << std::boolalpha << config.NearPlane);
       ROS_DEBUG_STREAM("FarPlane: "   << std::boolalpha << config.FarPlane);
+      ROS_DEBUG("Stream Parameters");
+      ROS_DEBUG_STREAM("Cloud: "   << std::boolalpha << config.Cloud);
+      ROS_DEBUG_STREAM("Images: "   << std::boolalpha << config.Images);
+      ROS_DEBUG_STREAM("Depth: " << std::boolalpha << config.Depth);
       ROS_DEBUG("CUDA Parameters");
       #ifdef CUDA_IMPLEMENTED
         ROS_DEBUG_STREAM("Use CUDA: "   << std::boolalpha << config.EnableCUDA);
@@ -290,8 +300,12 @@ class EnsensoDriver
         ROS_DEBUG_STREAM("CUDA is not supported. Upgrade EnsensoSDK to Version >= 2.1.7 in order to use CUDA.");
       #endif
       ROS_DEBUG("---");
-      //advertise topics only when parameters are set accordingly
 
+      enable_cloud_ = config.Cloud;
+      enable_images_ = config.Images;
+      enable_depth_ = config.Depth;
+
+      //advertise topics only when parameters are set accordingly
       if (config.FindPattern && !find_pattern_)
       {
         pattern_raw_pub_ = nh_.advertise<ensenso::RawStereoPattern> ("pattern/stereo", 1, false);
@@ -631,7 +645,7 @@ class EnsensoDriver
                          r_raw_pub_.getNumSubscribers() + l_rectified_pub_.getNumSubscribers() + 
                          r_rectified_pub_.getNumSubscribers()) > 0); 
 
-      if (need_images && !is_streaming_images_)
+      if (enable_images_ && need_images && !is_streaming_images_)
       {
         if (rgb_available_ && (rgb_raw_pub_.getNumSubscribers() + rgb_rectified_pub_.getNumSubscribers()) > 0)
         {
@@ -654,7 +668,7 @@ class EnsensoDriver
         }
         is_streaming_images_ = true;
       }
-      else if (!need_images && is_streaming_images_)
+      else if (( !enable_images_ || !need_images ) && is_streaming_images_)
       {
         image_connection_.disconnect();
         is_streaming_images_ = false;
@@ -668,7 +682,8 @@ class EnsensoDriver
 
     void cloudSubscribeCallback ()
     {
-      if ((cloud_pub_.getNumSubscribers() > 0) && !is_streaming_cloud_)
+      bool need_cloud = cloud_pub_.getNumSubscribers() > 0;
+      if (enable_cloud_ && need_cloud && !is_streaming_cloud_)
       {
         if(rgb_available_)
         {
@@ -688,7 +703,7 @@ class EnsensoDriver
         }
         is_streaming_cloud_ = true;
       }
-      else if ((cloud_pub_.getNumSubscribers() == 0) && is_streaming_cloud_)
+      else if ( (!enable_cloud_ || !need_cloud) && is_streaming_cloud_)
       {
         cloud_connection_.disconnect();
         is_streaming_cloud_ = false;
@@ -701,7 +716,8 @@ class EnsensoDriver
 
     void depthSubscribeCallback ()
     {
-      if ((depth_pub_.getNumSubscribers() > 0) && !is_streaming_depth_)
+      bool need_depth = depth_pub_.getNumSubscribers() > 0;
+      if (enable_depth_ && need_depth && !is_streaming_depth_)
       {
         boost::function<void(
           const boost::shared_ptr<pcl::PCLGenImage<float> >&)> f = boost::bind (&EnsensoDriver::depthCallback, this, _1);
@@ -712,7 +728,7 @@ class EnsensoDriver
           ensenso_ptr_->start();
         }
       }
-      else if ((depth_pub_.getNumSubscribers() == 0) && is_streaming_depth_)
+      else if ((!enable_depth_ || !need_depth) && is_streaming_depth_)
       {
         depth_connection_.disconnect();
         is_streaming_depth_ = false;
