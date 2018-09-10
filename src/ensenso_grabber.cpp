@@ -795,25 +795,24 @@ void pcl::EnsensoGrabber::processGrabbing ()
           getImage(camera_[itmImages][itmRectified][itmRight], images_rect->second);
         }
 
-
         // Publish signals
-        if (num_slots<sig_cb_ensenso_point_cloud> () > 0)
+        if (need_cloud)
         {
           point_cloud_signal_->operator () (cloud);
         }
-        if (num_slots<sig_cb_ensenso_point_cloud_rgb> () > 0)
+        if (need_cloud_rgb)
         {
           point_cloud_rgb_signal_->operator () (rgb_cloud);
         }
-        if (num_slots<sig_cb_ensenso_images> () > 0)
+        if (need_images)
         {
           images_signal_->operator () (images_raw, images_rect);
         }
-        if (num_slots<sig_cb_ensenso_images_rgb> () > 0)
+        if (need_images_rgb)
         {
           images_rgb_signal_->operator () (images_raw, images_rect, images_rgb);
         }
-        if (num_slots<sig_cb_ensenso_image_depth> () > 0)
+        if (need_depth)
         {
           image_depth_signal_->operator () (depth_image);
         }
