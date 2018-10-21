@@ -298,8 +298,10 @@ bool pcl::EnsensoGrabber::getCameraInfo(std::string cam, sensor_msgs::CameraInfo
 {
   try
   {
+    bool depth = false;
     if (cam == "Depth")
     {
+      depth = true;
       cam  = use_rgb_ ? "RGB" : "Left";
     }
     NxLibItem camera = (cam == "RGB" ) ? monocam_ : camera_;
@@ -309,10 +311,25 @@ bool pcl::EnsensoGrabber::getCameraInfo(std::string cam, sensor_msgs::CameraInfo
     cam_info.width = camera[itmSensor][itmSize][0].asInt();
     cam_info.height = camera[itmSensor][itmSize][1].asInt();
     cam_info.distortion_model = "plumb_bob";
-    // Distorsion factors
+    // Distorsion factors (as in ROS CameraInfo Documentation, [K1, K2, T1, T2, K3])
+
     cam_info.D.resize(5);
-    for(std::size_t i = 0; i < cam_info.D.size(); ++i)
-        cam_info.D[i] = camera_dist[i].asDouble();
+    if (depth)
+    {
+      for(std::size_t i = 0; i < cam_info.D.size(); ++i)
+      {
+          cam_info.D[i] = 0;
+      }
+    }
+    else
+    {
+      cam_info.D[0] = camera_dist[0].asDouble();
+      cam_info.D[1] = camera_dist[1].asDouble();
+      cam_info.D[0] = camera_dist[5].asDouble();
+      cam_info.D[0] = camera_dist[6].asDouble();
+      cam_info.D[0] = camera_dist[2].asDouble();
+    }
+
     // K and R matrices
     for(std::size_t i = 0; i < 3; ++i)
     {
