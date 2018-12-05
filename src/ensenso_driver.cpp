@@ -278,7 +278,10 @@ class EnsensoDriver
       ROS_DEBUG_STREAM("ShadowingThreshold: " << config.ShadowingThreshold);
       ROS_DEBUG("Postprocessing Parameters");
       ROS_DEBUG_STREAM("Find Pattern: "   << std::boolalpha << config.FindPattern);
-      ROS_WARN_STREAM("The calibration pattern will not be searched for, calibration will not work.");
+      if (!config.FindPattern)
+      {
+        ROS_WARN_STREAM("The calibration pattern will not be searched for, calibration will not work.");
+      }
       ROS_DEBUG_STREAM("UniquenessRatio: " << config.UniquenessRatio);
       ROS_DEBUG_STREAM("MedianFilterRadius: "<< config.MedianFilterRadius);
       ROS_DEBUG_STREAM("SpeckleComponentThreshold: "<< config.SpeckleComponentThreshold);
@@ -289,6 +292,7 @@ class EnsensoDriver
       ROS_DEBUG_STREAM("SurfaceConnectivity: "   << std::boolalpha << config.SurfaceConnectivity);
       ROS_DEBUG_STREAM("NearPlane: "   << std::boolalpha << config.NearPlane);
       ROS_DEBUG_STREAM("FarPlane: "   << std::boolalpha << config.FarPlane);
+      ROS_DEBUG_STREAM("UseOpenGL: "   << std::boolalpha << config.UseOpenGL);
       ROS_DEBUG("Stream Parameters");
       ROS_DEBUG_STREAM("Cloud: "   << std::boolalpha << config.Cloud);
       ROS_DEBUG_STREAM("Images: "   << std::boolalpha << config.Images);
@@ -358,6 +362,7 @@ class EnsensoDriver
       ensenso_ptr_->setSurfaceConnectivity(config.SurfaceConnectivity);
       ensenso_ptr_->setNearPlane(config.NearPlane);
       ensenso_ptr_->setFarPlane(config.FarPlane);
+      ensenso_ptr_->setUseOpenGL(config.UseOpenGL);
       //CUDA parameter
       #ifdef CUDA_IMPLEMENTED
         ensenso_ptr_->setEnableCUDA(config.EnableCUDA);
@@ -613,6 +618,7 @@ class EnsensoDriver
         }
       }
     }
+
     template <typename T>
     sensor_msgs::ImagePtr toImageMsg(pcl::PCLGenImage<T>& pcl_image, ros::Time now, std::string frame_id)
     {
@@ -640,10 +646,10 @@ class EnsensoDriver
 
     void imagesSubscribeCallback ()
     {
-      bool need_images = ((rgb_raw_pub_.getNumSubscribers() + rgb_raw_pub_.getNumSubscribers() + 
-                         rgb_rectified_pub_.getNumSubscribers() + l_raw_pub_.getNumSubscribers() + 
-                         r_raw_pub_.getNumSubscribers() + l_rectified_pub_.getNumSubscribers() + 
-                         r_rectified_pub_.getNumSubscribers()) > 0); 
+      bool need_images = ((rgb_raw_pub_.getNumSubscribers() + rgb_raw_pub_.getNumSubscribers() +
+                         rgb_rectified_pub_.getNumSubscribers() + l_raw_pub_.getNumSubscribers() +
+                         r_raw_pub_.getNumSubscribers() + l_rectified_pub_.getNumSubscribers() +
+                         r_rectified_pub_.getNumSubscribers()) > 0);
 
       if (enable_images_ && need_images && !is_streaming_images_)
       {

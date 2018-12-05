@@ -685,7 +685,7 @@ void pcl::EnsensoGrabber::processGrabbing ()
   bool continue_grabbing = running_;
   if (use_rgb_)
   {
-    Transform tf; 
+    Transform tf;
     getTFLeftToRGB(tf_left_to_rgb_);
   }
   while (continue_grabbing)
@@ -717,7 +717,7 @@ void pcl::EnsensoGrabber::processGrabbing ()
         last = now;
 
         triggerCameras();
-        
+
         if (!running_) {
             return;
         }
@@ -842,8 +842,9 @@ void pcl::EnsensoGrabber::processGrabbing ()
       NxLibItem result = NxLibItem()[itmExecute][itmResult];
       if (ex.getErrorCode() == NxLibExecutionFailed && result[itmErrorSymbol].asString() == "CUDA")
       {
-        PCL_WARN("Not enough video memory to use CUDA. Disabling CUDA support.");
+        PCL_WARN("Encountered error due to use of CUDA. Disabling CUDA support.\n");
         setEnableCUDA(false);
+        ensensoExceptionHandling (ex, "processGrabbing");
         continue;
       }
       ensensoExceptionHandling (ex, "processGrabbing");
@@ -1431,6 +1432,23 @@ if (!device_open_)
   }
   return (true);
 }
+
+bool pcl::EnsensoGrabber::setUseOpenGL (const bool enable) const
+{
+if (!device_open_)
+    return (false);
+  try
+  {
+    (*root_)[itmParameters][itmRenderPointMap][itmUseOpenGL].set (enable);
+  }
+  catch (NxLibException &ex)
+  {
+    ensensoExceptionHandling (ex, "setUseOpenGL");
+    return (false);
+  }
+  return (true);
+}
+
 
 bool pcl::EnsensoGrabber::setUseRGB (const bool enable)
 {

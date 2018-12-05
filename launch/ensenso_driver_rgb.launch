@@ -4,9 +4,26 @@
   <arg name="monoserial" default="4103203953" />
   <arg name="camera" default="camera" />
   <arg name="frame_id" default="$(arg camera)_optical_frame" />
+  <arg name="rgb_frame_id" default="$(arg camera)_rgb_optical_frame" />
 
   <!-- Logging -->
   <env name="ROSCONSOLE_CONFIG_FILE" value="$(find ensenso)/config/rosconsole.conf"/>
+
+  <!-- Display hack to avoid 'freeglut (NxLib): failed to open display' when
+       logging in via SSH.  Still requires that a window manager is running,
+       i.e., a user has to be logged into the graphical environment, for
+       example via autologin:
+
+       Create a file /etc/lightdm/lightdm.conf.d/90-autologin.conf with the following content:
+
+       ```
+       [Seat:*]
+       autologin-user=robot
+       autologin-user-timeout=0
+       ```
+       -->
+  <arg name="display" default=":0.0" />
+  <env name="DISPLAY" value="$(arg display)" />
 
   <!-- Ensenso driver -->
   <node name="ensenso_driver" pkg="ensenso" type="ensenso_driver" ns="$(arg camera)" output="screen">
@@ -15,7 +32,7 @@
     <param name="monoserial"                type="string" value="$(arg monoserial)" />
     <param name="camera_frame_id"       type="string" value="$(arg frame_id)" />
     <param name="rgb_camera_frame_id"       type="string" value="$(arg rgb_frame_id)" />
-    <param name="stream_calib_pattern"  type="bool"   value="true" />
+    <param name="stream_calib_pattern"  type="bool"   value="false" />
     <!-- ******************** STREAM PARAMETERS ******************** -->
     <param name="Cloud"  type="bool"   value="true" />
     <param name="Images"  type="bool"   value="true" />
@@ -63,6 +80,7 @@
     <param name="SurfaceConnectivity"            type="int" value="3" />
     <param name="NearPlane"            type="int" value="50" />
     <param name="FarPlane"            type="int" value="3000" />
+    <param name="UseOpenGL"            type="bool" value="true" />
     <!-- CUDA parameter -->
     <param name="EnableCUDA"            type="bool" value="true" />
   </node>
