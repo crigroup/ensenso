@@ -325,9 +325,9 @@ bool pcl::EnsensoGrabber::getCameraInfo(std::string cam, sensor_msgs::CameraInfo
     {
       cam_info.D[0] = camera_dist[0].asDouble();
       cam_info.D[1] = camera_dist[1].asDouble();
-      cam_info.D[0] = camera_dist[5].asDouble();
-      cam_info.D[0] = camera_dist[6].asDouble();
-      cam_info.D[0] = camera_dist[2].asDouble();
+      cam_info.D[2] = camera_dist[5].asDouble();
+      cam_info.D[3] = camera_dist[6].asDouble();
+      cam_info.D[4] = camera_dist[2].asDouble();
     }
 
     // K and R matrices
