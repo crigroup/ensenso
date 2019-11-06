@@ -5,6 +5,7 @@
 #include <pcl/pcl_config.h>
 #include <pcl/common/io.h>
 #include <pcl/common/time.h>
+#include <pcl/common/transforms.h>
 #include <pcl/io/eigen.h>
 #include <pcl/io/boost.h>
 #include <pcl/io/grabber.h>
@@ -652,7 +653,7 @@ protected:
     /** @brief Retrieve RGB depth data from NxLib
     * @param[out] acquired point cloud and depth image
     */
-    void getDepthDataRGB(const pcl::PointCloud<pcl::PointXYZRGBA>::Ptr& cloud, const pcl::PCLGenImage<float>::Ptr& depthimage);
+    void getDepthDataRGB(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr& cloud, const pcl::PCLGenImage<float>::Ptr& depthimage);
 
     /** @brief Retrieve depth data from NxLib
     * @param[out] acquired point cloud and depth image

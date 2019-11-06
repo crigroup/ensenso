@@ -1,5 +1,5 @@
 #include "ensenso/ensenso_grabber.h"
-
+#include <boost/make_shared.hpp>
 
 void ensensoExceptionHandling (const NxLibException &ex,
                  std::string func_nam)
@@ -685,7 +685,6 @@ void pcl::EnsensoGrabber::processGrabbing ()
   bool continue_grabbing = running_;
   if (use_rgb_)
   {
-    Transform tf;
     getTFLeftToRGB(tf_left_to_rgb_);
   }
   while (continue_grabbing)
@@ -852,7 +851,7 @@ void pcl::EnsensoGrabber::processGrabbing ()
   }
 }
 
-void pcl::EnsensoGrabber::getDepthDataRGB(const pcl::PointCloud<pcl::PointXYZRGBA>::Ptr& cloud, const pcl::PCLGenImage<float>::Ptr& depth_image)
+void pcl::EnsensoGrabber::getDepthDataRGB(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr& cloud, const pcl::PCLGenImage<float>::Ptr& depth_image)
 {
   NxLibCommand renderPM (cmdRenderPointMap);
   renderPM.parameters()[itmCamera].set(monocam_[itmSerialNumber].asString());
@@ -894,10 +893,20 @@ void pcl::EnsensoGrabber::getDepthDataRGB(const pcl::PointCloud<pcl::PointXYZRGB
     }
     if (get_cloud)
     {
-      cloud->points[i / 3].x = point_map[i] / 1000.0 - tf_left_to_rgb_.tx;
-      cloud->points[i / 3].y = point_map[i + 1] / 1000.0 - tf_left_to_rgb_.ty;
+      cloud->points[i / 3].x = point_map[i] / 1000.0;
+      cloud->points[i / 3].y = point_map[i + 1] / 1000.0;
       cloud->points[i / 3].z = point_map[i + 2] / 1000.0;
     }
+  }
+  if (get_cloud) {
+    // transform to rgb_optical_frame
+    Eigen::Quaternionf q(tf_left_to_rgb_.qw, tf_left_to_rgb_.qx, tf_left_to_rgb_.qy, tf_left_to_rgb_.qz);
+    Eigen::Transform<float, 3, Eigen::Affine> transform;
+    transform = Eigen::Translation3f(tf_left_to_rgb_.tx, tf_left_to_rgb_.ty, tf_left_to_rgb_.tz);
+    transform.rotate(q);
+    pcl::PointCloud<pcl::PointXYZRGBA>::Ptr transformed_cloud = boost::make_shared<pcl::PointCloud<pcl::PointXYZRGBA> >();
+    pcl::transformPointCloud(*cloud, *transformed_cloud, transform.inverse());
+    cloud = transformed_cloud;
   }
   if (get_cloud)
   {
